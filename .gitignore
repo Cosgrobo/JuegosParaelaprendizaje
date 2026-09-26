@@ -9,6 +9,10 @@ lerna-debug.log*
 
 node_modules
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 dist
 dist-ssr
 coverage
