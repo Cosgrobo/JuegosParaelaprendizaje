@@ -10,11 +10,19 @@ import RouletteView from '../views/games/RouletteView.vue'
 import MemoryView from '../views/games/MemoryView.vue'
 import QuizView from '../views/games/QuizView.vue'
 import DetectiveView from '../views/games/DetectiveView.vue'
+import EditarJuegoView from '../views/EditarJuegoView.vue'
+import CrearJuegoView from '../views/CrearJuegoView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
 
   routes: [
+
+    {
+    path: '/juegos/editar/:id',
+    name: 'editar-juego',
+    component: EditarJuegoView
+    },
 
     {
       path: '/registro',
@@ -35,9 +43,15 @@ const router = createRouter({
     },
 
     {
-      path: '/juegos/sopa',
-      name: 'sopa',
-      component: WordSearchView
+    path: '/juegos/crear',
+    name: 'crear-juego',
+    component: CrearJuegoView
+    },
+
+   {
+    path: '/juegos/sopa/:id',
+    name: 'sopa',
+    component: WordSearchView
     },
 
     {

@@ -1,0 +1,404 @@
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+const route = useRoute()
+const router = useRouter()
+
+const nombre = ref('')
+const descripcion = ref('')
+const instrucciones = ref('')
+const activo = ref(true)
+
+const cargando = ref(true)
+const guardando = ref(false)
+
+const mensaje = ref('')
+const tipoMensaje = ref('')
+
+const obtenerJuego = async () => {
+  try {
+    const respuesta = await fetch(
+      `http://localhost:3000/api/juegos/${route.params.id}`
+    )
+
+    if (!respuesta.ok) {
+      throw new Error('No se pudo obtener el juego')
+    }
+
+    const juego = await respuesta.json()
+
+    nombre.value = juego.nombre
+    descripcion.value = juego.descripcion
+    instrucciones.value = juego.instrucciones
+    activo.value = Boolean(juego.activo)
+
+  } catch (error) {
+
+    console.error(error)
+
+    mensaje.value = 'No se pudo cargar el juego'
+    tipoMensaje.value = 'error'
+
+  } finally {
+
+    cargando.value = false
+
+  }
+}
+
+const guardarCambios = async () => {
+
+  mensaje.value = ''
+  guardando.value = true
+
+  try {
+
+    const respuesta = await fetch(
+      `http://localhost:3000/api/juegos/${route.params.id}`,
+      {
+        method: 'PUT',
+
+        headers: {
+          'Content-Type': 'application/json'
+        },
+
+        body: JSON.stringify({
+          nombre: nombre.value,
+          descripcion: descripcion.value,
+          instrucciones: instrucciones.value,
+          activo: activo.value
+        })
+      }
+    )
+
+    const datos = await respuesta.json()
+
+    if (!respuesta.ok) {
+
+      mensaje.value = datos.mensaje
+      tipoMensaje.value = 'error'
+
+      return
+    }
+
+    mensaje.value = 'Juego actualizado correctamente'
+    tipoMensaje.value = 'exito'
+
+    setTimeout(() => {
+        router.push('/home')
+    }, 1000)
+
+  } catch (error) {
+
+    console.error(error)
+
+    mensaje.value = 'No se pudo conectar con el servidor'
+    tipoMensaje.value = 'error'
+
+  } finally {
+
+    guardando.value = false
+
+  }
+}
+
+const volver = () => {
+  router.push('/home')
+}
+
+onMounted(() => {
+  obtenerJuego()
+})
+</script>
+
+<template>
+
+  <div class="editar">
+
+    <div class="editar-card">
+
+      <h1>✏️ Editar juego</h1>
+
+      <p class="subtitulo">
+        Modifica la información del juego
+      </p>
+
+      <div v-if="cargando" class="cargando">
+        Cargando juego...
+      </div>
+
+      <form
+        v-else
+        @submit.prevent="guardarCambios"
+      >
+
+        <div class="campo">
+
+          <label for="nombre">
+            Nombre
+          </label>
+
+          <input
+            id="nombre"
+            v-model="nombre"
+            type="text"
+            maxlength="100"
+            required
+          >
+
+        </div>
+
+        <div class="campo">
+
+          <label for="descripcion">
+            Descripción
+          </label>
+
+          <textarea
+            id="descripcion"
+            v-model="descripcion"
+            rows="3"
+            required
+          ></textarea>
+
+        </div>
+
+        <div class="campo">
+
+          <label for="instrucciones">
+            Instrucciones
+          </label>
+
+          <textarea
+            id="instrucciones"
+            v-model="instrucciones"
+            rows="5"
+            required
+          ></textarea>
+
+        </div>
+
+        <div class="activo">
+
+          <input
+            id="activo"
+            v-model="activo"
+            type="checkbox"
+          >
+
+          <label for="activo">
+            Juego activo
+          </label>
+
+        </div>
+
+        <p
+          v-if="mensaje"
+          :class="tipoMensaje"
+        >
+          {{ mensaje }}
+        </p>
+
+        <div class="botones">
+
+          <button
+            type="button"
+            class="cancelar"
+            @click="volver"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="submit"
+            class="guardar"
+            :disabled="guardando"
+          >
+            {{ guardando ? 'Guardando...' : 'Guardar cambios' }}
+          </button>
+
+        </div>
+
+      </form>
+
+    </div>
+
+  </div>
+
+</template>
+
+<style scoped>
+
+.editar {
+  min-height: 100vh;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  padding: 30px;
+
+  background: #f4f6f8;
+}
+
+.editar-card {
+  width: 100%;
+  max-width: 600px;
+
+  padding: 35px;
+
+  background: white;
+
+  border-radius: 16px;
+
+  box-shadow:
+    0 5px 20px rgba(0, 0, 0, 0.08);
+}
+
+.editar-card h1 {
+  margin-bottom: 8px;
+
+  color: #1e3a5f;
+}
+
+.subtitulo {
+  margin-bottom: 30px;
+
+  color: #64748b;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+
+  gap: 20px;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+
+  gap: 7px;
+}
+
+.campo label {
+  font-weight: 600;
+
+  color: #334155;
+}
+
+input,
+textarea {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  padding: 12px;
+
+  border: 1px solid #cbd5e1;
+
+  border-radius: 8px;
+
+  font-family: inherit;
+
+  font-size: 15px;
+
+  outline: none;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus,
+textarea:focus {
+  border-color: #2563eb;
+
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.activo {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+}
+
+.activo input {
+  width: auto;
+}
+
+.botones {
+  display: flex;
+
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  margin-top: 10px;
+}
+
+.botones button {
+  padding: 11px 18px;
+
+  border: none;
+
+  border-radius: 8px;
+
+  font-size: 15px;
+
+  cursor: pointer;
+}
+
+.cancelar {
+  background: #e2e8f0;
+
+  color: #334155;
+}
+
+.guardar {
+  background: #2563eb;
+
+  color: white;
+}
+
+.guardar:hover {
+  background: #1d4ed8;
+}
+
+.guardar:disabled {
+  opacity: 0.6;
+
+  cursor: not-allowed;
+}
+
+.error {
+  padding: 10px;
+
+  border-radius: 8px;
+
+  background: #fef2f2;
+
+  color: #b91c1c;
+}
+
+.exito {
+  padding: 10px;
+
+  border-radius: 8px;
+
+  background: #f0fdf4;
+
+  color: #15803d;
+}
+
+.cargando {
+  text-align: center;
+
+  color: #64748b;
+}
+
+</style>

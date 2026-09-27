@@ -1,44 +1,169 @@
-```vue
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import {
+  ref,
+  computed,
+  onMounted,
+  onUnmounted
+} from 'vue'
 
-const palabras = ref([
-  'VUE',
-  'HTML',
-  'CSS',
-  'JAVASCRIPT',
-  'MYSQL'
-])
+import { useRoute } from 'vue-router'
+
+
+// ==========================================
+// RUTA
+// ==========================================
+
+const route = useRoute()
+
+const idJuego = route.params.id
+
+
+// ==========================================
+// PALABRAS
+// ==========================================
+
+const palabras = ref([])
+
+const pistas = ref([])
+
+const cargando = ref(true)
+
+const errorCarga = ref('')
+
+
+// ==========================================
+// LETRAS
+// ==========================================
 
 const letras = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
-/*
-  Estadísticas
-*/
+
+// ==========================================
+// ESTADÍSTICAS
+// ==========================================
+
 const aciertos = ref(0)
+
 const errores = ref(0)
+
 const puntuacion = ref(0)
 
-/*
-  Tiempo
-*/
+
+// ==========================================
+// TIEMPO
+// ==========================================
+
 const tiempoTranscurrido = ref(0)
+
 const horaInicio = ref(null)
+
 const horaFin = ref(null)
 
 let temporizador = null
 
-/*
-  Estado del juego
-*/
+
+// ==========================================
+// ESTADO DEL JUEGO
+// ==========================================
+
 const juegoTerminado = ref(false)
 
-/*
-  Generar tablero
-*/
+
+// ==========================================
+// TABLERO
+// ==========================================
+
+const tablero = ref([])
+
+
+// ==========================================
+// PALABRA SELECCIONADA
+// ==========================================
+
+const palabraSeleccionada = ref('')
+
+const palabrasEncontradas = ref([])
+
+const celdasSeleccionadas = ref([])
+
+const mensaje = ref('')
+
+const respuestaCorrecta = ref(false)
+
+
+// ==========================================
+// OBTENER PALABRAS DESDE MYSQL
+// ==========================================
+
+const cargarPalabras = async () => {
+
+  try {
+
+    cargando.value = true
+
+    errorCarga.value = ''
+
+    const respuesta = await fetch(
+      `http://localhost:3000/api/juegos/${idJuego}/palabras-sopa`
+    )
+
+    const datos = await respuesta.json()
+
+    if (!respuesta.ok) {
+
+      throw new Error(
+        datos.mensaje ||
+        'No se pudieron obtener las palabras'
+      )
+
+    }
+
+    palabras.value = datos.map(
+      item => item.palabra.toUpperCase()
+    )
+
+    pistas.value = datos.map(
+      item => item.pista
+    )
+
+    if (palabras.value.length === 0) {
+
+      throw new Error(
+        'Este juego todavía no tiene palabras registradas'
+      )
+
+    }
+
+    tablero.value = generarTablero()
+
+  } catch (error) {
+
+    console.error(
+      'Error al cargar las palabras:',
+      error
+    )
+
+    errorCarga.value =
+      error.message ||
+      'No se pudieron cargar las palabras'
+
+  } finally {
+
+    cargando.value = false
+
+  }
+
+}
+
+
+// ==========================================
+// GENERAR TABLERO
+// ==========================================
+
 const generarTablero = () => {
 
   const filas = 10
+
   const columnas = 10
 
   const tablero = Array.from(
@@ -46,74 +171,108 @@ const generarTablero = () => {
     () => Array(columnas).fill('')
   )
 
-  /*
-    Direcciones permitidas
 
-    Derecha
-    Abajo
-    Diagonal abajo-derecha
+  // ========================================
+  // DIRECCIONES
+  // ========================================
 
-    Las palabras siempre se colocan
-    en su orden normal.
-  */
   const direcciones = [
-    { fila: 0, columna: 1 },
-    { fila: 1, columna: 0 },
-    { fila: 1, columna: 1 }
+    {
+      fila: 0,
+      columna: 1
+    },
+
+    {
+      fila: 1,
+      columna: 0
+    },
+
+    {
+      fila: 1,
+      columna: 1
+    }
   ]
+
+
+  // ========================================
+  // COLOCAR PALABRAS
+  // ========================================
 
   palabras.value.forEach((palabra) => {
 
     let colocada = false
 
-    while (!colocada) {
+    let intentos = 0
+
+    const maxIntentos = 100
+
+
+    while (
+      !colocada &&
+      intentos < maxIntentos
+    ) {
+
+      intentos++
+
 
       const direccion =
         direcciones[
           Math.floor(
-            Math.random() * direcciones.length
+            Math.random() *
+            direcciones.length
           )
         ]
 
+
       const filaInicial =
         Math.floor(
-          Math.random() * filas
+          Math.random() *
+          filas
         )
+
 
       const columnaInicial =
         Math.floor(
-          Math.random() * columnas
+          Math.random() *
+          columnas
         )
+
 
       const ultimaFila =
         filaInicial +
         direccion.fila *
-          (palabra.length - 1)
+        (palabra.length - 1)
+
 
       const ultimaColumna =
         columnaInicial +
         direccion.columna *
-          (palabra.length - 1)
+        (palabra.length - 1)
 
-      /*
-        Comprobar que la palabra
-        no salga del tablero
-      */
+
+      // ====================================
+      // COMPROBAR LÍMITES
+      // ====================================
+
       if (
         ultimaFila < 0 ||
         ultimaFila >= filas ||
         ultimaColumna < 0 ||
         ultimaColumna >= columnas
       ) {
+
         continue
+
       }
+
+
+      // ====================================
+      // COMPROBAR COLISIONES
+      // ====================================
 
       let puedeColocarse = true
 
-      /*
-        Comprobar que las letras
-        no choquen con otras palabras
-      */
+
       for (
         let i = 0;
         i < palabra.length;
@@ -124,30 +283,41 @@ const generarTablero = () => {
           filaInicial +
           direccion.fila * i
 
+
         const columna =
           columnaInicial +
           direccion.columna * i
 
+
         const letraActual =
           tablero[fila][columna]
+
 
         if (
           letraActual !== '' &&
           letraActual !== palabra[i]
         ) {
+
           puedeColocarse = false
+
           break
+
         }
+
       }
+
 
       if (!puedeColocarse) {
+
         continue
+
       }
 
-      /*
-        Colocar la palabra
-        respetando su orden original
-      */
+
+      // ====================================
+      // COLOCAR PALABRA
+      // ====================================
+
       for (
         let i = 0;
         i < palabra.length;
@@ -158,21 +328,29 @@ const generarTablero = () => {
           filaInicial +
           direccion.fila * i
 
+
         const columna =
           columnaInicial +
           direccion.columna * i
 
+
         tablero[fila][columna] =
           palabra[i]
+
       }
 
+
       colocada = true
+
     }
+
   })
 
-  /*
-    Rellenar espacios vacíos
-  */
+
+  // ========================================
+  // RELLENAR ESPACIOS
+  // ========================================
+
   for (
     let fila = 0;
     fila < filas;
@@ -192,140 +370,165 @@ const generarTablero = () => {
         const posicion =
           Math.floor(
             Math.random() *
-              letras.length
+            letras.length
           )
+
 
         tablero[fila][columna] =
           letras[posicion]
+
       }
+
     }
+
   }
 
+
   return tablero
+
 }
 
 
-const tablero = ref(
-  generarTablero()
-)
+// ==========================================
+// FORMATO DEL TIEMPO
+// ==========================================
 
-const palabraSeleccionada =
-  ref('')
-
-const palabrasEncontradas =
-  ref([])
-
-const celdasSeleccionadas =
-  ref([])
-
-const mensaje =
-  ref('')
-
-const respuestaCorrecta =
-  ref(false)
-
-
-/*
-  Formatear segundos como MM:SS
-*/
 const formatoTiempo = (segundos) => {
 
   const minutos =
-    Math.floor(segundos / 60)
+    Math.floor(
+      segundos / 60
+    )
+
 
   const segundosRestantes =
     segundos % 60
 
+
   return `${String(minutos).padStart(2, '0')}:${String(
     segundosRestantes
   ).padStart(2, '0')}`
+
 }
 
 
-/*
-  Iniciar temporizador
-*/
+// ==========================================
+// INICIAR TEMPORIZADOR
+// ==========================================
+
 const iniciarJuego = () => {
 
-  horaInicio.value = new Date()
+  horaInicio.value =
+    new Date()
 
-  temporizador = setInterval(() => {
 
-    if (!juegoTerminado.value) {
+  temporizador =
+    setInterval(() => {
 
-      tiempoTranscurrido.value++
+      if (
+        !juegoTerminado.value
+      ) {
 
-    }
+        tiempoTranscurrido.value++
 
-  }, 1000)
+      }
+
+    }, 1000)
+
 }
 
 
-/*
-  Finalizar juego
-*/
+// ==========================================
+// FINALIZAR JUEGO
+// ==========================================
+
 const finalizarJuego = () => {
 
-  if (juegoTerminado.value) {
+  if (
+    juegoTerminado.value
+  ) {
+
     return
+
   }
 
-  juegoTerminado.value = true
 
-  horaFin.value = new Date()
+  juegoTerminado.value =
+    true
 
-  clearInterval(temporizador)
 
-  temporizador = null
+  horaFin.value =
+    new Date()
+
+
+  clearInterval(
+    temporizador
+  )
+
+
+  temporizador =
+    null
+
 }
 
 
-/*
-  Seleccionar letra
-*/
+// ==========================================
+// SELECCIONAR LETRA
+// ==========================================
+
 const seleccionarLetra = (
   letra,
   fila,
   columna
 ) => {
 
-  if (juegoTerminado.value) {
+  if (
+    juegoTerminado.value
+  ) {
+
     return
+
   }
+
 
   const ultimaCelda =
     celdasSeleccionadas.value[
       celdasSeleccionadas.value.length - 1
     ]
 
+
   if (ultimaCelda) {
 
     const diferenciaFila =
       Math.abs(
-        fila - ultimaCelda.fila
+        fila -
+        ultimaCelda.fila
       )
+
 
     const diferenciaColumna =
       Math.abs(
-        columna - ultimaCelda.columna
+        columna -
+        ultimaCelda.columna
       )
 
-    /*
-      Las letras seleccionadas deben
-      estar juntas
-    */
+
     if (
       diferenciaFila > 1 ||
       diferenciaColumna > 1
     ) {
+
       return
+
     }
+
   }
 
-  /*
-    Evitar seleccionar
-    la misma celda dos veces
-  */
+
+  // ========================================
+  // EVITAR REPETIR CELDA
+  // ========================================
+
   if (
     celdasSeleccionadas.value.some(
       (celda) =>
@@ -333,22 +536,28 @@ const seleccionarLetra = (
         celda.columna === columna
     )
   ) {
+
     return
+
   }
 
-  palabraSeleccionada.value += letra
+
+  palabraSeleccionada.value +=
+    letra
+
 
   celdasSeleccionadas.value.push({
     fila,
     columna
   })
+
 }
 
 
-/*
-  Saber si una celda está
-  seleccionada actualmente
-*/
+// ==========================================
+// CELDA SELECCIONADA
+// ==========================================
+
 const estaSeleccionada = (
   fila,
   columna
@@ -359,13 +568,14 @@ const estaSeleccionada = (
       celda.fila === fila &&
       celda.columna === columna
   )
+
 }
 
 
-/*
-  Saber si una celda pertenece
-  a una palabra encontrada
-*/
+// ==========================================
+// CELDA ENCONTRADA
+// ==========================================
+
 const estaEncontrada = (
   fila,
   columna
@@ -379,44 +589,54 @@ const estaEncontrada = (
           celda.columna === columna
       )
   )
+
 }
 
 
-/*
-  Comprobar que las letras
-  formen una línea recta
-*/
+// ==========================================
+// VALIDAR LÍNEA
+// ==========================================
+
 const seleccionEsValida = () => {
 
   if (
     celdasSeleccionadas.value.length < 2
   ) {
+
     return true
+
   }
+
 
   const primera =
     celdasSeleccionadas.value[0]
 
+
   const segunda =
     celdasSeleccionadas.value[1]
+
 
   const diferenciaFila =
     segunda.fila -
     primera.fila
 
+
   const diferenciaColumna =
     segunda.columna -
     primera.columna
+
 
   const direccionFila =
     Math.sign(
       diferenciaFila
     )
 
+
   const direccionColumna =
     Math.sign(
       diferenciaColumna
     )
+
 
   for (
     let i = 1;
@@ -427,55 +647,76 @@ const seleccionEsValida = () => {
     const celda =
       celdasSeleccionadas.value[i]
 
+
     const filaEsperada =
       primera.fila +
       direccionFila * i
+
 
     const columnaEsperada =
       primera.columna +
       direccionColumna * i
 
+
     if (
       celda.fila !== filaEsperada ||
       celda.columna !== columnaEsperada
     ) {
+
       return false
+
     }
+
   }
 
+
   return true
+
 }
 
 
-/*
-  Comprobar palabra
-*/
+// ==========================================
+// COMPROBAR PALABRA
+// ==========================================
+
 const comprobarPalabra = () => {
 
-  if (juegoTerminado.value) {
+  if (
+    juegoTerminado.value
+  ) {
+
     return
+
   }
+
 
   const palabra =
     palabraSeleccionada.value
 
-  /*
-    No hay selección
-  */
+
+  // ========================================
+  // SIN SELECCIÓN
+  // ========================================
+
   if (!palabra) {
 
     mensaje.value =
       'Selecciona una palabra primero.'
 
+
     respuestaCorrecta.value =
       false
 
+
     return
+
   }
 
-  /*
-    Comprobar línea
-  */
+
+  // ========================================
+  // COMPROBAR LÍNEA
+  // ========================================
+
   if (
     !seleccionEsValida()
   ) {
@@ -483,21 +724,27 @@ const comprobarPalabra = () => {
     mensaje.value =
       'Las letras deben estar en línea.'
 
+
     respuestaCorrecta.value =
       false
 
+
     errores.value++
+
 
     puntuacion.value =
       Math.max(
         0,
         puntuacion.value - 25
       )
+
   }
 
-  /*
-    Comprobar palabra
-  */
+
+  // ========================================
+  // COMPROBAR PALABRA
+  // ========================================
+
   else if (
     palabras.value.includes(
       palabra
@@ -507,15 +754,14 @@ const comprobarPalabra = () => {
     const palabraEncontrada =
       palabra
 
-    /*
-      Comprobar si ya fue encontrada
-    */
+
     const yaEncontrada =
       palabrasEncontradas.value.some(
         (encontrada) =>
           encontrada.palabra ===
           palabraEncontrada
       )
+
 
     if (!yaEncontrada) {
 
@@ -530,33 +776,42 @@ const comprobarPalabra = () => {
 
       })
 
-      /*
-        Actualizar estadísticas
-      */
+
       aciertos.value++
 
-      puntuacion.value += 100
+
+      puntuacion.value +=
+        100
+
 
       mensaje.value =
         `¡Correcto! Encontraste ${palabraEncontrada}`
 
+
       respuestaCorrecta.value =
         true
 
-      /*
-        Comprobar si terminó el juego
-      */
+
+      // ==================================
+      // COMPROBAR FIN
+      // ==================================
+
       if (
         palabrasEncontradas.value.length ===
         palabras.value.length
       ) {
 
         finalizarJuego()
+
       }
 
-    } else {
+    }
+
+
+    else {
 
       errores.value++
+
 
       puntuacion.value =
         Math.max(
@@ -564,21 +819,27 @@ const comprobarPalabra = () => {
           puntuacion.value - 25
         )
 
+
       mensaje.value =
         `La palabra ${palabraEncontrada} ya fue encontrada`
 
+
       respuestaCorrecta.value =
         false
+
     }
 
   }
 
-  /*
-    Palabra incorrecta
-  */
+
+  // ========================================
+  // PALABRA INCORRECTA
+  // ========================================
+
   else {
 
     errores.value++
+
 
     puntuacion.value =
       Math.max(
@@ -586,80 +847,117 @@ const comprobarPalabra = () => {
         puntuacion.value - 25
       )
 
+
     mensaje.value =
       'Palabra incorrecta'
 
+
     respuestaCorrecta.value =
       false
+
   }
 
-  /*
-    Limpiar selección
-  */
+
+  // ========================================
+  // LIMPIAR SELECCIÓN
+  // ========================================
+
   palabraSeleccionada.value =
     ''
 
+
   celdasSeleccionadas.value =
     []
+
 }
 
 
-/*
-  Reiniciar juego
-*/
+// ==========================================
+// REINICIAR JUEGO
+// ==========================================
+
 const reiniciarJuego = () => {
 
-  clearInterval(temporizador)
+  clearInterval(
+    temporizador
+  )
 
-  temporizador = null
+
+  temporizador =
+    null
+
 
   tablero.value =
     generarTablero()
 
+
   palabraSeleccionada.value =
     ''
+
 
   palabrasEncontradas.value =
     []
 
+
   celdasSeleccionadas.value =
     []
+
 
   mensaje.value =
     ''
 
+
   respuestaCorrecta.value =
     false
+
 
   aciertos.value =
     0
 
+
   errores.value =
     0
+
 
   puntuacion.value =
     0
 
+
   tiempoTranscurrido.value =
     0
+
 
   horaInicio.value =
     null
 
+
   horaFin.value =
     null
+
 
   juegoTerminado.value =
     false
 
+
   iniciarJuego()
+
 }
 
 
-/*
-  Progreso
-*/
+// ==========================================
+// PROGRESO
+// ==========================================
+
 const progreso = computed(() => {
+
+  if (
+    palabras.value.length === 0
+  ) {
+
+    return 0
+
+  }
+
 
   return Math.round(
     (
@@ -667,25 +965,39 @@ const progreso = computed(() => {
       palabras.value.length
     ) * 100
   )
-})
-
-
-/*
-  Iniciar al cargar el componente
-*/
-onMounted(() => {
-
-  iniciarJuego()
 
 })
 
 
-/*
-  Detener temporizador
-*/
+// ==========================================
+// CARGAR JUEGO
+// ==========================================
+
+onMounted(async () => {
+
+  await cargarPalabras()
+
+
+  if (
+    palabras.value.length > 0
+  ) {
+
+    iniciarJuego()
+
+  }
+
+})
+
+
+// ==========================================
+// DETENER TEMPORIZADOR
+// ==========================================
+
 onUnmounted(() => {
 
-  clearInterval(temporizador)
+  clearInterval(
+    temporizador
+  )
 
 })
 
@@ -704,259 +1016,294 @@ onUnmounted(() => {
     </p>
 
 
-    <!-- Estadísticas -->
+    <!-- Cargando -->
 
-    <div class="stats">
+    <div
+      v-if="cargando"
+      class="loading"
+    >
 
-      <div class="stat">
-
-        <strong>Aciertos</strong>
-
-        <span>
-          {{ aciertos }}
-        </span>
-
-      </div>
-
-
-      <div class="stat">
-
-        <strong>Errores</strong>
-
-        <span>
-          {{ errores }}
-        </span>
-
-      </div>
-
-
-      <div class="stat">
-
-        <strong>Puntuación</strong>
-
-        <span>
-          {{ puntuacion }}
-        </span>
-
-      </div>
-
-
-      <div class="stat">
-
-        <strong>Progreso</strong>
-
-        <span>
-          {{ progreso }}%
-        </span>
-
-      </div>
-
-
-      <div class="stat">
-
-        <strong>Tiempo</strong>
-
-        <span>
-          {{ formatoTiempo(tiempoTranscurrido) }}
-        </span>
-
-      </div>
+      Cargando palabras...
 
     </div>
 
 
-    <!-- Palabra actual -->
+    <!-- Error -->
 
-    <div class="current-word">
+    <div
+      v-else-if="errorCarga"
+      class="error-carga"
+    >
 
-      <strong>
-        Palabra:
-      </strong>
-
-      <span>
-        {{ palabraSeleccionada || '---' }}
-      </span>
+      {{ errorCarga }}
 
     </div>
 
 
-    <!-- Tablero -->
+    <!-- Juego -->
 
-    <div class="board">
+    <template
+      v-else
+    >
 
-      <template
-        v-for="(
-          fila,
-          filaIndex
-        ) in tablero"
+      <!-- Estadísticas -->
 
-        :key="filaIndex"
-      >
+      <div class="stats">
 
-        <button
+        <div class="stat">
+
+          <strong>Aciertos</strong>
+
+          <span>
+            {{ aciertos }}
+          </span>
+
+        </div>
+
+
+        <div class="stat">
+
+          <strong>Errores</strong>
+
+          <span>
+            {{ errores }}
+          </span>
+
+        </div>
+
+
+        <div class="stat">
+
+          <strong>Puntuación</strong>
+
+          <span>
+            {{ puntuacion }}
+          </span>
+
+        </div>
+
+
+        <div class="stat">
+
+          <strong>Progreso</strong>
+
+          <span>
+            {{ progreso }}%
+          </span>
+
+        </div>
+
+
+        <div class="stat">
+
+          <strong>Tiempo</strong>
+
+          <span>
+            {{ formatoTiempo(tiempoTranscurrido) }}
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <!-- Palabra actual -->
+
+      <div class="current-word">
+
+        <strong>
+          Palabra:
+        </strong>
+
+        <span>
+          {{ palabraSeleccionada || '---' }}
+        </span>
+
+      </div>
+
+
+      <!-- Tablero -->
+
+      <div class="board">
+
+        <template
           v-for="(
-            letra,
-            columnaIndex
-          ) in fila"
+            fila,
+            filaIndex
+          ) in tablero"
 
-          :key="columnaIndex"
+          :key="filaIndex"
+        >
 
-          :class="{
-
-            seleccionada:
-              estaSeleccionada(
-                filaIndex,
-                columnaIndex
-              ),
-
-            encontrada:
-              estaEncontrada(
-                filaIndex,
-                columnaIndex
-              )
-
-          }"
-
-          @click="
-            seleccionarLetra(
+          <button
+            v-for="(
               letra,
-              filaIndex,
               columnaIndex
-            )
-          "
-        >
+            ) in fila"
 
-          {{ letra }}
+            :key="columnaIndex"
 
-        </button>
+            :class="{
 
-      </template>
+              seleccionada:
+                estaSeleccionada(
+                  filaIndex,
+                  columnaIndex
+                ),
 
-    </div>
+              encontrada:
+                estaEncontrada(
+                  filaIndex,
+                  columnaIndex
+                )
 
+            }"
 
-    <!-- Comprobar -->
-
-    <button
-      v-if="!juegoTerminado"
-
-      class="check-button"
-
-      @click="
-        comprobarPalabra
-      "
-    >
-
-      Comprobar palabra
-
-    </button>
-
-
-    <!-- Mensaje -->
-
-    <p
-      v-if="mensaje"
-
-      :class="
-        respuestaCorrecta
-          ? 'correcto'
-          : 'incorrecto'
-      "
-    >
-
-      {{ mensaje }}
-
-    </p>
-
-
-    <!-- Pantalla final -->
-
-    <div
-      v-if="juegoTerminado"
-      class="game-over"
-    >
-
-      <h2>
-        🎉 ¡Juego terminado!
-      </h2>
-
-      <p>
-        Encontraste todas las palabras.
-      </p>
-
-
-      <div class="final-stats">
-
-        <p>
-          <strong>Aciertos:</strong>
-          {{ aciertos }}
-        </p>
-
-        <p>
-          <strong>Errores:</strong>
-          {{ errores }}
-        </p>
-
-        <p>
-          <strong>Puntuación:</strong>
-          {{ puntuacion }}
-        </p>
-
-        <p>
-          <strong>Tiempo:</strong>
-          {{ formatoTiempo(tiempoTranscurrido) }}
-        </p>
-
-      </div>
-
-
-      <button
-        class="restart-button"
-        @click="reiniciarJuego"
-      >
-        Jugar nuevamente
-      </button>
-
-    </div>
-
-
-    <!-- Lista de palabras -->
-
-    <div
-      v-if="!juegoTerminado"
-    >
-
-      <h2>Palabras</h2>
-
-      <ul>
-
-        <li
-          v-for="palabra in palabras"
-
-          :key="palabra"
-        >
-
-          {{ palabra }}
-
-          <span
-            v-if="
-              palabrasEncontradas.some(
-                encontrada =>
-                  encontrada.palabra ===
-                  palabra
+            @click="
+              seleccionarLetra(
+                letra,
+                filaIndex,
+                columnaIndex
               )
             "
           >
 
-            ✓
+            {{ letra }}
 
-          </span>
+          </button>
 
-        </li>
+        </template>
 
-      </ul>
+      </div>
 
-    </div>
+
+      <!-- Comprobar -->
+
+      <button
+        v-if="!juegoTerminado"
+
+        class="check-button"
+
+        @click="
+          comprobarPalabra
+        "
+      >
+
+        Comprobar palabra
+
+      </button>
+
+
+      <!-- Mensaje -->
+
+      <p
+        v-if="mensaje"
+
+        :class="
+          respuestaCorrecta
+            ? 'correcto'
+            : 'incorrecto'
+        "
+      >
+
+        {{ mensaje }}
+
+      </p>
+
+
+      <!-- Pantalla final -->
+
+      <div
+        v-if="juegoTerminado"
+        class="game-over"
+      >
+
+        <h2>
+          🎉 ¡Juego terminado!
+        </h2>
+
+        <p>
+          Encontraste todas las palabras.
+        </p>
+
+
+        <div class="final-stats">
+
+          <p>
+            <strong>Aciertos:</strong>
+            {{ aciertos }}
+          </p>
+
+          <p>
+            <strong>Errores:</strong>
+            {{ errores }}
+          </p>
+
+          <p>
+            <strong>Puntuación:</strong>
+            {{ puntuacion }}
+          </p>
+
+          <p>
+            <strong>Tiempo:</strong>
+            {{ formatoTiempo(tiempoTranscurrido) }}
+          </p>
+
+        </div>
+
+
+        <button
+          class="restart-button"
+          @click="reiniciarJuego"
+        >
+
+          Jugar nuevamente
+
+        </button>
+
+      </div>
+
+
+      <!-- Lista de palabras -->
+
+      <div
+        v-if="!juegoTerminado"
+      >
+
+        <h2>
+          Palabras
+        </h2>
+
+        <ul>
+
+          <li
+            v-for="palabra in palabras"
+            :key="palabra"
+          >
+
+            {{ palabra }}
+
+            <span
+              v-if="
+                palabrasEncontradas.some(
+                  encontrada =>
+                    encontrada.palabra ===
+                    palabra
+                )
+              "
+            >
+
+              ✓
+
+            </span>
+
+          </li>
+
+        </ul>
+
+      </div>
+
+    </template>
 
   </div>
 
@@ -976,9 +1323,37 @@ onUnmounted(() => {
 }
 
 
-/*
-  Estadísticas
-*/
+/* ==========================================
+   CARGANDO Y ERROR
+========================================== */
+
+.loading {
+
+  margin: 40px 0;
+
+  font-size: 20px;
+
+}
+
+
+.error-carga {
+
+  margin: 40px 0;
+
+  padding: 20px;
+
+  border-radius: 10px;
+
+  background-color: #f8d7da;
+
+  color: #842029;
+
+}
+
+
+/* ==========================================
+   ESTADÍSTICAS
+========================================== */
 
 .stats {
 
@@ -1034,9 +1409,9 @@ onUnmounted(() => {
 }
 
 
-/*
-  Palabra actual
-*/
+/* ==========================================
+   PALABRA ACTUAL
+========================================== */
 
 .current-word {
 
@@ -1056,9 +1431,9 @@ onUnmounted(() => {
 }
 
 
-/*
-  Tablero
-*/
+/* ==========================================
+   TABLERO
+========================================== */
 
 .board {
 
@@ -1091,9 +1466,9 @@ onUnmounted(() => {
 }
 
 
-/*
-  Selección actual
-*/
+/* ==========================================
+   SELECCIÓN ACTUAL
+========================================== */
 
 .board button.seleccionada {
 
@@ -1104,9 +1479,9 @@ onUnmounted(() => {
 }
 
 
-/*
-  Palabra encontrada
-*/
+/* ==========================================
+   PALABRA ENCONTRADA
+========================================== */
 
 .board button.encontrada {
 
@@ -1117,9 +1492,9 @@ onUnmounted(() => {
 }
 
 
-/*
-  Botón comprobar
-*/
+/* ==========================================
+   BOTÓN COMPROBAR
+========================================== */
 
 .check-button {
 
@@ -1136,9 +1511,9 @@ onUnmounted(() => {
 }
 
 
-/*
-  Mensajes
-*/
+/* ==========================================
+   MENSAJES
+========================================== */
 
 .correcto {
 
@@ -1158,9 +1533,9 @@ onUnmounted(() => {
 }
 
 
-/*
-  Pantalla final
-*/
+/* ==========================================
+   PANTALLA FINAL
+========================================== */
 
 .game-over {
 
@@ -1213,9 +1588,9 @@ onUnmounted(() => {
 }
 
 
-/*
-  Lista de palabras
-*/
+/* ==========================================
+   LISTA DE PALABRAS
+========================================== */
 
 ul {
 
