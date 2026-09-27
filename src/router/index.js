@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import LoginView from '../views/LoginView.vue'
 import HomeView from '../views/HomeView.vue'
+import RegisterView from '../views/RegisterView.vue'
 
 import WordSearchView from '../views/games/WordSearchView.vue'
 import CrosswordView from '../views/games/CrosswordView.vue'
@@ -14,6 +15,13 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
 
   routes: [
+
+    {
+      path: '/registro',
+      name: 'registro',
+      component: RegisterView
+    },
+
     {
       path: '/',
       name: 'login',

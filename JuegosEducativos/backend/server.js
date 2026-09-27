@@ -1,4 +1,3 @@
-
 const express = require('express')
 const cors = require('cors')
 
@@ -47,25 +46,18 @@ app.get('/api/juegos', async (req, res) => {
   }
 })
 
-
-// =====================================================
 // LOGIN
-// =====================================================
-
 app.post('/api/login', async (req, res) => {
-
   try {
 
     const { usuario, contraseña } = req.body
 
-    // Comprobar que se recibieron los datos
     if (!usuario || !contraseña) {
       return res.status(400).json({
         mensaje: 'Usuario y contraseña son obligatorios'
       })
     }
 
-    // Buscar usuario en MySQL
     const [usuarios] = await conexion.query(
       `
       SELECT
@@ -79,14 +71,12 @@ app.post('/api/login', async (req, res) => {
       [usuario, contraseña]
     )
 
-    // Usuario no encontrado
     if (usuarios.length === 0) {
       return res.status(401).json({
         mensaje: 'Usuario o contraseña incorrectos'
       })
     }
 
-    // Usuario encontrado
     const usuarioEncontrado = usuarios[0]
 
     res.json({
@@ -102,12 +92,67 @@ app.post('/api/login', async (req, res) => {
       mensaje: 'Error interno del servidor'
     })
   }
-
 })
 
+// REGISTRO
+app.post('/api/registro', async (req, res) => {
+  try {
+
+    const { nombre, usuario, contraseña } = req.body
+
+    // Comprobar que todos los campos tengan información
+    if (!nombre || !usuario || !contraseña) {
+      return res.status(400).json({
+        mensaje: 'Todos los campos son obligatorios'
+      })
+    }
+
+    // Comprobar si el usuario ya existe
+    const [usuariosExistentes] = await conexion.query(
+      `
+      SELECT id_usuario
+      FROM usuarios
+      WHERE usuario = ?
+      `,
+      [usuario]
+    )
+
+    if (usuariosExistentes.length > 0) {
+      return res.status(409).json({
+        mensaje: 'Ese usuario ya está registrado'
+      })
+    }
+
+    // Insertar nuevo usuario
+    const [resultado] = await conexion.query(
+      `
+      INSERT INTO usuarios
+      (nombre, usuario, contraseña)
+      VALUES (?, ?, ?)
+      `,
+      [nombre, usuario, contraseña]
+    )
+
+    res.status(201).json({
+      mensaje: 'Usuario registrado correctamente',
+      usuario: {
+        id_usuario: resultado.insertId,
+        nombre: nombre,
+        usuario: usuario
+      }
+    })
+
+  } catch (error) {
+
+    console.error('Error en el registro:', error.message)
+
+    res.status(500).json({
+      mensaje: 'Error interno del servidor'
+    })
+  }
+})
 
 // Iniciar servidor
 app.listen(PORT, () => {
   console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`)
 })
-
