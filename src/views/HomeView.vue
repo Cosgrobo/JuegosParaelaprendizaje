@@ -59,32 +59,44 @@ onMounted(() => {
       >
 
         <GameCard
-          v-for="juego in juegos"
-          :key="juego.id_juego"
-          :id="juego.id_juego"
-          :title="juego.nombre"
-          :description="juego.descripcion"
-          :icon="juego.tipo === 'Sopa de letras'
-            ? '🔎'
-            : juego.tipo === 'Crucigrama'
-              ? '✏️'
-              : juego.tipo === 'Ruleta'
-                ? '🎡'
-                : juego.tipo === 'Memorama'
-                  ? '🧠'
-                  : juego.tipo === 'Preguntas'
-                    ? '❓'
-                    : '🎮'"
-          :route="
-           juego.tipo === 'Sopa de letras'
-            ? `/juegos/sopa/${juego.id_juego}`
-             : juego.tipo === 'Crucigrama'
-              ? '/juegos/crucigrama'
-             : juego.tipo === 'Ruleta'
-               ? '/juegos/ruleta'
-              : '#'
-            "
-        />
+  v-for="juego in juegos"
+  :key="juego.id_juego"
+  :id="juego.id_juego"
+  :title="juego.nombre"
+  :description="juego.descripcion"
+
+  :icon="
+    juego.tipo === 'Sopa de letras'
+      ? '🔎'
+      : juego.tipo === 'Crucigrama'
+        ? '✏️'
+        : juego.tipo === 'Ruleta'
+          ? '🎡'
+          : juego.tipo === 'Memorama'
+            ? '🧠'
+            : juego.tipo === 'Quiz'
+              ? '❓'
+              : juego.tipo === 'Detective'
+                ? '🕵️'
+                : '🎮'
+  "
+
+  :route="
+    juego.tipo === 'Sopa de letras'
+      ? `/juegos/sopa/${juego.id_juego}`
+      : juego.tipo === 'Crucigrama'
+        ? '/juegos/crucigrama'
+        : juego.tipo === 'Ruleta'
+          ? '/juegos/ruleta'
+          : juego.tipo === 'Memorama'
+            ? '/juegos/memorama'
+            : juego.tipo === 'Quiz'
+              ? '/juegos/preguntas'
+              : juego.tipo === 'Detective'
+                ? '/juegos/detective'
+                : '#'
+  "
+/>
 
       </div>
 

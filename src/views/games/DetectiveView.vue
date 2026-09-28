@@ -257,165 +257,467 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
-const DEFAULT_ENIGMAS = [
-  {
-    id: "case-01",
-    subject: "Biología",
-    title: "El Proceso Verde",
-    answer: "Fotosintesis",
-    clues: [
-      "Proceso mediante el cual los organismos con clorofila captan luz solar.",
-      "Transforma agua y dióxido de carbono en glucosa y libera oxígeno a la atmósfera.",
-      "Es la forma de nutrición autótrofa propia de las plantas verdes."
-    ]
-  },
-  {
-    id: "case-02",
-    subject: "Matemáticas",
-    title: "El Triángulo Sagrado",
-    answer: "Teorema de Pitagoras",
-    clues: [
-      "Fórmula matemática fundamental que aplica solo en triángulos rectángulos.",
-      "Establece que la suma de los cuadrados de los catetos es igual al cuadrado de la hipotenusa.",
-      "Se expresa algebraicamente como a² + b² = c²."
-    ]
-  },
-  {
-    id: "case-03",
-    subject: "Historia",
-    title: "La Era del Carbón y Vapor",
-    answer: "Revolucion Industrial",
-    clues: [
-      "Transformación económica y tecnológica iniciada en Gran Bretaña a mediados del siglo XVIII.",
-      "Sustituyó el trabajo manual artesanal por la producción mecanizada en fábricas.",
-      "Paso decisivo caracterizado por el invento de la máquina de vapor y el ferrocarril."
-    ]
-  },
-  {
-    id: "case-04",
-    subject: "Física",
-    title: "La Fuerza Invisible",
-    answer: "Gravedad",
-    clues: [
-      "Fenómeno natural por el cual los objetos con masa se atraen entre sí.",
-      "Es la responsable de mantener a los planetas orbitando alrededor del Sol.",
-      "Fue formulada por Isaac Newton tras la célebre anécdota de la manzana."
-    ]
-  },
-  {
-    id: "case-05",
-    subject: "Lengua",
-    title: "El Traslado de Sentido",
-    answer: "Metafora",
-    clues: [
-      "Figura retórica que consiste en identificar un término real con uno imaginario.",
-      "No utiliza enlaces de comparación explícitos como la palabra 'como'.",
-      "Un ejemplo clásico es decir 'Las perlas de su boca' para referirse a sus dientes."
-    ]
-  }
-]
+// ========================================
+// DATOS GENERALES
+// ========================================
 
 const isTeacher = ref(false)
-const enigmas = ref([...DEFAULT_ENIGMAS])
+
+// Ahora los enigmas vendrán de MySQL
+const enigmas = ref([])
+
+const cargando = ref(true)
+const errorCarga = ref('')
+
 const selectedSubjectFilter = ref('ALL')
 const currentCaseIndex = ref(0)
+
+// ========================================
+// MÉTRICAS
+// ========================================
 
 const hits = ref(0)
 const errors = ref(0)
 const totalScore = ref(0)
 const solvedMap = ref({})
 
+// ========================================
+// ESTADO DEL CASO ACTUAL
+// ========================================
+
 const clueLevel = ref(1)
 const currentLives = ref(3)
 const deductionInput = ref('')
 
+// ========================================
+// TEMPORIZADOR
+// ========================================
+
 const secondsElapsed = ref(0)
 let timerInterval = null
+
+// ========================================
+// MODALES
+// ========================================
 
 const showModal = ref(false)
 const modalSuccess = ref(false)
 const modalMessage = ref('')
 const showAddModal = ref(false)
 
-const newForm = ref({ subject: '', title: '', answer: '', c1: '', c2: '', c3: '' })
+// ========================================
+// FORMULARIO NUEVO ENIGMA
+// ========================================
+
+const newForm = ref({
+  subject: '',
+  title: '',
+  answer: '',
+  c1: '',
+  c2: '',
+  c3: ''
+})
+
+// ========================================
+// TABLA DE RESULTADOS
+// ========================================
 
 const leaderboard = ref([
-  { name: "Estudiante Actual", score: computed(() => totalScore.value), solved: computed(() => hits.value) },
-  { name: "Agente Lucía", score: 260, solved: 3 },
-  { name: "Inspector Carlos", score: 100, solved: 1 }
+  {
+    name: 'Estudiante Actual',
+    score: computed(() => totalScore.value),
+    solved: computed(() => hits.value)
+  },
+  {
+    name: 'Agente Lucía',
+    score: 260,
+    solved: 3
+  },
+  {
+    name: 'Inspector Carlos',
+    score: 100,
+    solved: 1
+  }
 ])
 
+// ========================================
+// OBTENER ENIGMAS DESDE MYSQL
+// ========================================
+
+const obtenerEnigmas = async () => {
+  try {
+
+    cargando.value = true
+    errorCarga.value = ''
+
+    const respuesta = await fetch(
+      'http://localhost:3000/api/juegos/6/enigmas'
+    )
+
+    if (!respuesta.ok) {
+      throw new Error('No se pudieron obtener los enigmas')
+    }
+
+    const datos = await respuesta.json()
+
+    // Convertimos los nombres de la BD
+    // al formato que ya utiliza DetectiveView
+    enigmas.value = datos.map(enigma => ({
+      id: enigma.id_enigma,
+      subject: enigma.materia,
+      title: enigma.titulo,
+      answer: enigma.respuesta,
+
+      clues: [
+        enigma.pista_1,
+        enigma.pista_2,
+        enigma.pista_3
+      ]
+    }))
+
+    console.log(
+      'Enigmas cargados desde la BD:',
+      enigmas.value
+    )
+
+  } catch (error) {
+
+    console.error(
+      'Error al cargar enigmas:',
+      error
+    )
+
+    errorCarga.value =
+      'No se pudieron cargar los enigmas.'
+
+  } finally {
+
+    cargando.value = false
+
+  }
+}
+
+// ========================================
+// TEMPORIZADOR
+// ========================================
+
 const startTimer = () => {
-  if (timerInterval) clearInterval(timerInterval)
-  timerInterval = setInterval(() => { secondsElapsed.value++ }, 1000)
+
+  if (timerInterval) {
+    clearInterval(timerInterval)
+  }
+
+  timerInterval = setInterval(() => {
+    secondsElapsed.value++
+  }, 1000)
 }
 
 const formattedTime = computed(() => {
-  const mins = Math.floor(secondsElapsed.value / 60).toString().padStart(2, '0')
-  const secs = (secondsElapsed.value % 60).toString().padStart(2, '0')
+
+  const mins = Math
+    .floor(secondsElapsed.value / 60)
+    .toString()
+    .padStart(2, '0')
+
+  const secs = (
+    secondsElapsed.value % 60
+  )
+    .toString()
+    .padStart(2, '0')
+
   return `${mins}:${secs}`
 })
 
-const availableSubjects = computed(() => [...new Set(enigmas.value.map(e => e.subject))])
-const filteredEnigmas = computed(() => selectedSubjectFilter.value === 'ALL' ? enigmas.value : enigmas.value.filter(e => e.subject === selectedSubjectFilter.value))
-const activeCase = computed(() => filteredEnigmas.value[currentCaseIndex.value] || filteredEnigmas.value[0])
-const progressPercentage = computed(() => enigmas.value.length === 0 ? 0 : Math.round((hits.value / enigmas.value.length) * 100))
-const currentRewardPoints = computed(() => clueLevel.value === 1 ? 100 : clueLevel.value === 2 ? 60 : 30)
+// ========================================
+// COMPUTED
+// ========================================
 
-const toggleRole = () => { isTeacher.value = !isTeacher.value }
-const isSolved = (id) => !!solvedMap.value[id]
-const getSolvedPoints = (id) => solvedMap.value[id] || 0
-const requestMoreClue = () => { if (clueLevel.value < 3) clueLevel.value++ }
+const availableSubjects = computed(() => [
+  ...new Set(
+    enigmas.value.map(e => e.subject)
+  )
+])
 
-const normalizeString = (str) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "")
+const filteredEnigmas = computed(() => {
+
+  if (selectedSubjectFilter.value === 'ALL') {
+    return enigmas.value
+  }
+
+  return enigmas.value.filter(
+    e => e.subject === selectedSubjectFilter.value
+  )
+})
+
+const activeCase = computed(() => {
+
+  return (
+    filteredEnigmas.value[currentCaseIndex.value]
+    || filteredEnigmas.value[0]
+  )
+})
+
+const progressPercentage = computed(() => {
+
+  if (enigmas.value.length === 0) {
+    return 0
+  }
+
+  return Math.round(
+    (hits.value / enigmas.value.length) * 100
+  )
+})
+
+const currentRewardPoints = computed(() => {
+
+  if (clueLevel.value === 1) {
+    return 100
+  }
+
+  if (clueLevel.value === 2) {
+    return 60
+  }
+
+  return 30
+})
+
+// ========================================
+// FUNCIONES GENERALES
+// ========================================
+
+const toggleRole = () => {
+  isTeacher.value = !isTeacher.value
+}
+
+const isSolved = (id) => {
+  return !!solvedMap.value[id]
+}
+
+const getSolvedPoints = (id) => {
+  return solvedMap.value[id] || 0
+}
+
+// ========================================
+// PISTAS
+// ========================================
+
+const requestMoreClue = () => {
+
+  if (clueLevel.value < 3) {
+    clueLevel.value++
+  }
+}
+
+// ========================================
+// NORMALIZAR RESPUESTAS
+// ========================================
+
+const normalizeString = (str) => {
+
+  return String(str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+}
+
+// ========================================
+// COMPROBAR RESPUESTA
+// ========================================
 
 const submitDeduction = () => {
-  if (!deductionInput.value.trim() || !activeCase.value) return
-  if (normalizeString(deductionInput.value) === normalizeString(activeCase.value.answer)) {
+
+  if (
+    !deductionInput.value.trim()
+    || !activeCase.value
+  ) {
+    return
+  }
+
+  const respuestaUsuario =
+    normalizeString(deductionInput.value)
+
+  const respuestaCorrecta =
+    normalizeString(activeCase.value.answer)
+
+  if (respuestaUsuario === respuestaCorrecta) {
+
     const pts = currentRewardPoints.value
+
     solvedMap.value[activeCase.value.id] = pts
+
     hits.value++
+
     totalScore.value += pts
+
     modalSuccess.value = true
-    modalMessage.value = `¡Has deducido correctamente "${activeCase.value.answer}" sumando +${pts} Pts!`
+
+    modalMessage.value =
+      `¡Has deducido correctamente "${activeCase.value.answer}" sumando +${pts} Pts!`
+
     showModal.value = true
+
     deductionInput.value = ''
+
   } else {
+
     errors.value++
+
     currentLives.value--
+
     modalSuccess.value = false
-    modalMessage.value = currentLives.value <= 0 
-      ? `Sin intentos restantes. La respuesta era "${activeCase.value.answer}".` 
-      : `Incorrecto. Te quedan ${currentLives.value} intento(s).`
+
+    if (currentLives.value <= 0) {
+
+      modalMessage.value =
+        `Sin intentos restantes. La respuesta era "${activeCase.value.answer}".`
+
+    } else {
+
+      modalMessage.value =
+        `Incorrecto. Te quedan ${currentLives.value} intento(s).`
+
+    }
+
     showModal.value = true
   }
 }
 
-const prevCase = () => { if (currentCaseIndex.value > 0) { currentCaseIndex.value--; resetCaseState(); } }
-const nextCase = () => { if (currentCaseIndex.value < filteredEnigmas.value.length - 1) { currentCaseIndex.value++; resetCaseState(); } }
-const resetCaseState = () => { clueLevel.value = 1; currentLives.value = 3; deductionInput.value = ''; }
+// ========================================
+// NAVEGACIÓN
+// ========================================
+
+const resetCaseState = () => {
+
+  clueLevel.value = 1
+  currentLives.value = 3
+  deductionInput.value = ''
+}
+
+const prevCase = () => {
+
+  if (currentCaseIndex.value > 0) {
+
+    currentCaseIndex.value--
+
+    resetCaseState()
+  }
+}
+
+const nextCase = () => {
+
+  if (
+    currentCaseIndex.value <
+    filteredEnigmas.value.length - 1
+  ) {
+
+    currentCaseIndex.value++
+
+    resetCaseState()
+  }
+}
+
+// ========================================
+// REINICIAR JUEGO
+// ========================================
 
 const resetCurrentGame = () => {
-  hits.value = 0; errors.value = 0; totalScore.value = 0; solvedMap.value = {}; secondsElapsed.value = 0; currentCaseIndex.value = 0; resetCaseState();
+
+  hits.value = 0
+  errors.value = 0
+  totalScore.value = 0
+
+  solvedMap.value = {}
+
+  secondsElapsed.value = 0
+
+  currentCaseIndex.value = 0
+
+  resetCaseState()
 }
+
+// ========================================
+// PANEL MAESTRO
+// ========================================
+
+// Por ahora estas dos funciones siguen
+// trabajando solamente en Vue.
+// Después podemos conectarlas a MySQL.
 
 const saveNewEnigma = () => {
+
   enigmas.value.push({
+
     id: `case-custom-${Date.now()}`,
+
     subject: newForm.value.subject,
+
     title: newForm.value.title,
+
     answer: newForm.value.answer,
-    clues: [newForm.value.c1, newForm.value.c2, newForm.value.c3]
+
+    clues: [
+      newForm.value.c1,
+      newForm.value.c2,
+      newForm.value.c3
+    ]
   })
+
   showAddModal.value = false
-  newForm.value = { subject: '', title: '', answer: '', c1: '', c2: '', c3: '' }
+
+  newForm.value = {
+    subject: '',
+    title: '',
+    answer: '',
+    c1: '',
+    c2: '',
+    c3: ''
+  }
 }
 
-const deleteEnigma = (id) => { enigmas.value = enigmas.value.filter(e => e.id !== id) }
+const deleteEnigma = (id) => {
 
-watch(selectedSubjectFilter, () => { currentCaseIndex.value = 0; resetCaseState(); })
-onMounted(() => { startTimer() })
-onUnmounted(() => { if (timerInterval) clearInterval(timerInterval) })
+  enigmas.value =
+    enigmas.value.filter(
+      e => e.id !== id
+    )
+}
+
+// ========================================
+// WATCH
+// ========================================
+
+watch(
+  selectedSubjectFilter,
+  () => {
+
+    currentCaseIndex.value = 0
+
+    resetCaseState()
+  }
+)
+
+// ========================================
+// AL MONTAR COMPONENTE
+// ========================================
+
+onMounted(() => {
+
+  obtenerEnigmas()
+
+  startTimer()
+})
+
+// ========================================
+// AL SALIR
+// ========================================
+
+onUnmounted(() => {
+
+  if (timerInterval) {
+    clearInterval(timerInterval)
+  }
+})
 </script>
 
 <style scoped>

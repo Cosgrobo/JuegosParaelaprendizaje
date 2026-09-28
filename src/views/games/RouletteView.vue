@@ -1,1352 +1,874 @@
-```vue
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 
-/*
-========================================
-PREGUNTAS DE LA RULETA
-========================================
+const router = useRouter()
 
-Por ahora están aquí para poder probar
-el juego.
+// ==========================================
+// ESTADO DEL JUEGO
+// ==========================================
 
-Más adelante estas preguntas vendrán
-desde MySQL.
-*/
+const preguntas = ref([])
+const cargando = ref(true)
+const errorCarga = ref('')
 
-const preguntas = ref([
-  {
-    id: 1,
-    categoria: 'HTML',
-    pregunta: '¿Qué significa HTML?',
-    opciones: [
-      'Hyper Text Markup Language',
-      'High Text Machine Language',
-      'Hyper Tool Multi Language',
-      'Home Text Markup Language'
-    ],
-    respuesta: 0
-  },
-
-  {
-    id: 2,
-    categoria: 'CSS',
-    pregunta: '¿Para qué se utiliza principalmente CSS?',
-    opciones: [
-      'Crear bases de datos',
-      'Dar estilo a una página web',
-      'Crear servidores',
-      'Programar videojuegos'
-    ],
-    respuesta: 1
-  },
-
-  {
-    id: 3,
-    categoria: 'JavaScript',
-    pregunta: '¿Cuál de estos es un tipo de dato en JavaScript?',
-    opciones: [
-      'String',
-      'Style',
-      'Selector',
-      'ElementCSS'
-    ],
-    respuesta: 0
-  },
-
-  {
-    id: 4,
-    categoria: 'Vue',
-    pregunta: '¿Qué es Vue?',
-    opciones: [
-      'Un sistema operativo',
-      'Un framework de JavaScript',
-      'Una base de datos',
-      'Un lenguaje de programación'
-    ],
-    respuesta: 1
-  },
-
-  {
-    id: 5,
-    categoria: 'MySQL',
-    pregunta: '¿Qué es MySQL?',
-    opciones: [
-      'Un navegador',
-      'Un lenguaje de estilos',
-      'Un sistema de gestión de bases de datos',
-      'Un framework'
-    ],
-    respuesta: 2
-  },
-
-  {
-    id: 6,
-    categoria: 'Programación',
-    pregunta: '¿Qué instrucción se utiliza para mostrar información en la consola de JavaScript?',
-    opciones: [
-      'print()',
-      'console.log()',
-      'write.console()',
-      'show()'
-    ],
-    respuesta: 1
-  }
-])
-
-
-/*
-========================================
-ESTADO DE LA RULETA
-========================================
-*/
+const preguntaSeleccionada = ref(null)
+const indicePreguntaSeleccionada = ref(null)
 
 const girando = ref(false)
-
-const angulo = ref(0)
-
-const preguntaActual = ref(null)
+const rotacion = ref(0)
 
 const respuestaSeleccionada = ref(null)
-
-const respuestaRespondida = ref(false)
-
-const preguntasUsadas = ref([])
-
-
-/*
-========================================
-ESTADÍSTICAS
-========================================
-*/
-
-const aciertos = ref(0)
-
-const errores = ref(0)
-
-const puntuacion = ref(0)
-
-
-/*
-========================================
-TIEMPO
-========================================
-*/
-
-const tiempoTranscurrido = ref(0)
-
-const horaInicio = ref(null)
-
-const horaFin = ref(null)
-
-let temporizador = null
-
-
-/*
-========================================
-ESTADO FINAL
-========================================
-*/
-
-const juegoTerminado = ref(false)
-
+const respondida = ref(false)
 const mensaje = ref('')
 
-const respuestaCorrecta = ref(false)
+const aciertos = ref(0)
+const errores = ref(0)
+const puntuacion = ref(0)
+const respondidas = ref(0)
 
+const segundos = ref(0)
+let temporizador = null
 
-/*
-========================================
-COLORES DE LA RULETA
-========================================
-*/
+// ==========================================
+// COLORES DE LA RULETA
+// ==========================================
 
 const colores = [
+  '#ef5350',
+  '#26a69a',
   '#42a5f5',
   '#66bb6a',
   '#ffa726',
   '#ab47bc',
-  '#ef5350',
-  '#26a69a'
+  '#7e57c2',
+  '#ec407a'
 ]
 
+// ==========================================
+// CARGAR PREGUNTAS DESDE MYSQL
+// ==========================================
 
-/*
-========================================
-FORMATO DEL TIEMPO
-========================================
-*/
+const obtenerPreguntas = async () => {
+  try {
+    cargando.value = true
+    errorCarga.value = ''
 
-const formatoTiempo = (segundos) => {
-
-  const minutos =
-    Math.floor(segundos / 60)
-
-  const segundosRestantes =
-    segundos % 60
-
-  return `${String(minutos).padStart(2, '0')}:${String(
-    segundosRestantes
-  ).padStart(2, '0')}`
-}
-
-
-/*
-========================================
-INICIAR JUEGO
-========================================
-*/
-
-const iniciarJuego = () => {
-
-  horaInicio.value = new Date()
-
-  temporizador = setInterval(() => {
-
-    if (!juegoTerminado.value) {
-
-      tiempoTranscurrido.value++
-
-    }
-
-  }, 1000)
-}
-
-
-/*
-========================================
-GIRAR RULETA
-========================================
-*/
-
-const girarRuleta = () => {
-
-  if (
-    girando.value ||
-    juegoTerminado.value ||
-    preguntaActual.value
-  ) {
-
-    return
-
-  }
-
-
-  /*
-    Obtener preguntas disponibles.
-  */
-
-  const disponibles =
-    preguntas.value.filter(
-      pregunta =>
-        !preguntasUsadas.value.includes(
-          pregunta.id
-        )
+    const respuesta = await fetch(
+      'http://localhost:3000/api/juegos/5/preguntas'
     )
 
+    if (!respuesta.ok) {
+      throw new Error('No se pudieron obtener las preguntas')
+    }
 
-  /*
-    Si ya no quedan preguntas,
-    terminar juego.
-  */
+    const datos = await respuesta.json()
 
-  if (
-    disponibles.length === 0
-  ) {
+    if (!Array.isArray(datos) || datos.length === 0) {
+      throw new Error('Este juego no tiene preguntas registradas')
+    }
 
-    finalizarJuego()
+    const convertirRespuesta = {
+      A: 0,
+      B: 1,
+      C: 2,
+      D: 3
+    }
 
-    return
+    preguntas.value = datos.map((item, index) => ({
+      id: item.id_pregunta,
 
+      categoria: `Pregunta ${index + 1}`,
+
+      pregunta: item.pregunta,
+
+      opciones: [
+        item.opcion_a,
+        item.opcion_b,
+        item.opcion_c,
+        item.opcion_d
+      ],
+
+      respuesta:
+        convertirRespuesta[
+          String(item.respuesta_correcta).toUpperCase()
+        ]
+    }))
+
+    console.log(
+      'Preguntas de la ruleta cargadas:',
+      preguntas.value
+    )
+
+  } catch (error) {
+    console.error(
+      'Error cargando preguntas de la ruleta:',
+      error
+    )
+
+    errorCarga.value = error.message
+
+  } finally {
+    cargando.value = false
+  }
+}
+
+// ==========================================
+// PROGRESO
+// ==========================================
+
+const progreso = computed(() => {
+  if (preguntas.value.length === 0) {
+    return 0
   }
 
+  return Math.round(
+    (respondidas.value / preguntas.value.length) * 100
+  )
+})
+
+// ==========================================
+// FORMATO DEL TIEMPO
+// ==========================================
+
+const tiempoFormateado = computed(() => {
+  const minutos = Math.floor(segundos.value / 60)
+  const seg = segundos.value % 60
+
+  return `${String(minutos).padStart(2, '0')}:${String(seg).padStart(2, '0')}`
+})
+
+// ==========================================
+// ESTILO DE LA RULETA
+// ==========================================
+
+const fondoRuleta = computed(() => {
+  const total = preguntas.value.length
+
+  if (total === 0) {
+    return '#e5e7eb'
+  }
+
+  const gradosPorSeccion = 360 / total
+
+  const segmentos = preguntas.value.map((_, index) => {
+    const inicio = index * gradosPorSeccion
+    const fin = (index + 1) * gradosPorSeccion
+
+    return `${colores[index % colores.length]} ${inicio}deg ${fin}deg`
+  })
+
+  return `conic-gradient(${segmentos.join(', ')})`
+})
+
+// ==========================================
+// POSICIÓN DE LOS TEXTOS
+// ==========================================
+
+const estiloEtiqueta = (index) => {
+  const total = preguntas.value.length
+
+  if (total === 0) {
+    return {}
+  }
+
+  const gradosPorSeccion = 360 / total
+
+  const angulo =
+    index * gradosPorSeccion +
+    gradosPorSeccion / 2
+
+  return {
+    transform: `
+      rotate(${angulo}deg)
+      translateY(-145px)
+      rotate(${-angulo}deg)
+    `
+  }
+}
+
+// ==========================================
+// GIRAR RULETA
+// ==========================================
+
+const girarRuleta = () => {
+  if (
+    girando.value ||
+    preguntas.value.length === 0
+  ) {
+    return
+  }
 
   girando.value = true
 
-  mensaje.value = ''
+  preguntaSeleccionada.value = null
+  indicePreguntaSeleccionada.value = null
 
   respuestaSeleccionada.value = null
+  respondida.value = false
+  mensaje.value = ''
 
-  respuestaRespondida.value = false
-
-
-  /*
-    Seleccionar pregunta aleatoria.
-  */
-
-  const indice =
-    Math.floor(
-      Math.random() *
-      disponibles.length
-    )
-
-
-  const pregunta =
-    disponibles[indice]
-
-
-  /*
-    Marcar pregunta como utilizada.
-  */
-
-  preguntasUsadas.value.push(
-    pregunta.id
+  const indiceAleatorio = Math.floor(
+    Math.random() * preguntas.value.length
   )
 
+  const total = preguntas.value.length
+  const gradosPorSeccion = 360 / total
 
   /*
-    Calcular posición aleatoria
-    dentro de la ruleta.
+    La flecha está arriba.
+    Calculamos la rotación necesaria para que
+    el centro del segmento elegido termine arriba.
   */
 
-  const secciones =
-    preguntas.value.length
+  const centroSegmento =
+    indiceAleatorio * gradosPorSeccion +
+    gradosPorSeccion / 2
 
-  const gradosPorSeccion =
-    360 / secciones
+  const vueltasExtra = 5 * 360
 
-  const posicion =
-    pregunta.id - 1
-
-  const centroSeccion =
-    (
-      posicion *
-      gradosPorSeccion
-    ) +
-    (
-      gradosPorSeccion / 2
-    )
-
-
-  /*
-    Varias vueltas antes de detenerse.
-  */
-
-  const vueltas = 5
-
-  angulo.value +=
-    vueltas * 360 +
-    (
-      360 -
-      centroSeccion
-    )
-
-
-  /*
-    Esperar a que termine
-    la animación.
-  */
+  rotacion.value +=
+    vueltasExtra +
+    (360 - centroSegmento)
 
   setTimeout(() => {
+    preguntaSeleccionada.value =
+      preguntas.value[indiceAleatorio]
 
-    preguntaActual.value =
-      pregunta
+    indicePreguntaSeleccionada.value =
+      indiceAleatorio
 
     girando.value = false
-
-  }, 4500)
+  }, 3000)
 }
 
+// ==========================================
+// SELECCIONAR RESPUESTA
+// ==========================================
 
-/*
-========================================
-SELECCIONAR RESPUESTA
-========================================
-*/
-
-const seleccionarRespuesta = (
-  indice
-) => {
-
-  if (
-    respuestaRespondida.value ||
-    !preguntaActual.value ||
-    juegoTerminado.value
-  ) {
-
+const seleccionarRespuesta = (indice) => {
+  if (respondida.value) {
     return
-
   }
 
-  respuestaSeleccionada.value =
-    indice
+  respuestaSeleccionada.value = indice
 }
 
-
-/*
-========================================
-COMPROBAR RESPUESTA
-========================================
-*/
+// ==========================================
+// COMPROBAR RESPUESTA
+// ==========================================
 
 const comprobarRespuesta = () => {
-
   if (
     respuestaSeleccionada.value === null ||
-    !preguntaActual.value ||
-    respuestaRespondida.value
+    !preguntaSeleccionada.value ||
+    respondida.value
   ) {
-
     return
-
   }
 
-
-  respuestaRespondida.value = true
-
+  respondida.value = true
+  respondidas.value++
 
   if (
     respuestaSeleccionada.value ===
-    preguntaActual.value.respuesta
+    preguntaSeleccionada.value.respuesta
   ) {
-
     aciertos.value++
-
     puntuacion.value += 100
 
-    respuestaCorrecta.value = true
-
     mensaje.value =
-      '¡Respuesta correcta! +100 puntos'
+      '✅ ¡Respuesta correcta! +100 puntos'
 
   } else {
-
     errores.value++
 
-    puntuacion.value =
-      Math.max(
-        0,
-        puntuacion.value - 25
-      )
+    const indiceCorrecto =
+      preguntaSeleccionada.value.respuesta
 
-    respuestaCorrecta.value = false
+    const correcta =
+      preguntaSeleccionada.value.opciones[
+        indiceCorrecto
+      ]
 
     mensaje.value =
-      `Respuesta incorrecta. La respuesta correcta era: ${
-        preguntaActual.value.opciones[
-          preguntaActual.value.respuesta
-        ]
-      }`
-
+      `❌ Respuesta incorrecta. La respuesta correcta era: ${correcta}`
   }
+}
 
+// ==========================================
+// CLASE DE OPCIÓN
+// ==========================================
 
-  /*
-    Si se respondieron todas
-    las preguntas, terminar.
-  */
+const claseOpcion = (indice) => {
+  if (!respondida.value) {
+    return {
+      seleccionada:
+        respuestaSeleccionada.value === indice
+    }
+  }
 
   if (
-    preguntasUsadas.value.length ===
-    preguntas.value.length
+    indice ===
+    preguntaSeleccionada.value.respuesta
   ) {
-
-    setTimeout(() => {
-
-      finalizarJuego()
-
-    }, 1200)
-
+    return {
+      correcta: true
+    }
   }
-}
-
-
-/*
-========================================
-SIGUIENTE PREGUNTA
-========================================
-*/
-
-const siguientePregunta = () => {
-
-  if (!respuestaRespondida.value) {
-
-    return
-
-  }
-
-
-  /*
-    Si todavía hay preguntas,
-    regresar a la ruleta.
-  */
 
   if (
-    preguntasUsadas.value.length <
-    preguntas.value.length
+    indice === respuestaSeleccionada.value &&
+    indice !== preguntaSeleccionada.value.respuesta
   ) {
-
-    preguntaActual.value = null
-
-    respuestaSeleccionada.value = null
-
-    respuestaRespondida.value = false
-
-    mensaje.value = ''
-
-    respuestaCorrecta.value = false
-
+    return {
+      incorrecta: true
+    }
   }
 
+  return {}
 }
 
-
-/*
-========================================
-FINALIZAR
-========================================
-*/
-
-const finalizarJuego = () => {
-
-  if (juegoTerminado.value) {
-
-    return
-
-  }
-
-
-  juegoTerminado.value = true
-
-  horaFin.value = new Date()
-
-  clearInterval(
-    temporizador
-  )
-
-  temporizador = null
-}
-
-
-/*
-========================================
-PROGRESO
-========================================
-*/
-
-const progreso = computed(() => {
-
-  return Math.round(
-    (
-      preguntasUsadas.value.length /
-      preguntas.value.length
-    ) * 100
-  )
-})
-
-
-/*
-========================================
-REINICIAR
-========================================
-*/
+// ==========================================
+// REINICIAR
+// ==========================================
 
 const reiniciarJuego = () => {
+  aciertos.value = 0
+  errores.value = 0
+  puntuacion.value = 0
+  respondidas.value = 0
 
-  clearInterval(
-    temporizador
-  )
+  segundos.value = 0
 
-  temporizador = null
-
-
-  girando.value = false
-
-  angulo.value = 0
-
-  preguntaActual.value = null
+  preguntaSeleccionada.value = null
+  indicePreguntaSeleccionada.value = null
 
   respuestaSeleccionada.value = null
-
-  respuestaRespondida.value = false
-
-  preguntasUsadas.value = []
-
-  aciertos.value = 0
-
-  errores.value = 0
-
-  puntuacion.value = 0
-
-  tiempoTranscurrido.value = 0
-
-  horaInicio.value = null
-
-  horaFin.value = null
-
-  juegoTerminado.value = false
-
+  respondida.value = false
   mensaje.value = ''
 
-  respuestaCorrecta.value = false
-
-
-  iniciarJuego()
-
+  rotacion.value = 0
 }
 
+// ==========================================
+// CICLO DE VIDA
+// ==========================================
 
-/*
-========================================
-INICIAR AL CARGAR
-========================================
-*/
+onMounted(async () => {
+  await obtenerPreguntas()
 
-onMounted(() => {
-
-  iniciarJuego()
-
+  temporizador = setInterval(() => {
+    segundos.value++
+  }, 1000)
 })
 
-
-/*
-========================================
-LIMPIAR AL SALIR
-========================================
-*/
-
 onUnmounted(() => {
-
-  clearInterval(
-    temporizador
-  )
-
+  if (temporizador) {
+    clearInterval(temporizador)
+  }
 })
 </script>
 
-
 <template>
+  <div class="roulette-page">
 
-  <div class="game">
-
-    <!-- ================================= -->
     <!-- ENCABEZADO -->
-    <!-- ================================= -->
 
-    <header class="game-header">
+    <header class="header">
 
-      <h1>🎡 Ruleta de preguntas</h1>
+      <button
+        class="volver"
+        @click="router.push('/')"
+      >
+        ← Volver
+      </button>
 
-      <p>
-        Gira la ruleta y responde las preguntas.
-      </p>
+      <div>
+        <h1>🎡 Ruleta de preguntas</h1>
+
+        <p>
+          Gira la ruleta y responde las preguntas.
+        </p>
+      </div>
 
     </header>
 
 
-    <!-- ================================= -->
-    <!-- ESTADÍSTICAS -->
-    <!-- ================================= -->
-
-    <div class="stats">
-
-      <div class="stat">
-
-        <strong>Aciertos</strong>
-
-        <span>
-          {{ aciertos }}
-        </span>
-
-      </div>
-
-
-      <div class="stat">
-
-        <strong>Errores</strong>
-
-        <span>
-          {{ errores }}
-        </span>
-
-      </div>
-
-
-      <div class="stat">
-
-        <strong>Puntuación</strong>
-
-        <span>
-          {{ puntuacion }}
-        </span>
-
-      </div>
-
-
-      <div class="stat">
-
-        <strong>Progreso</strong>
-
-        <span>
-          {{ progreso }}%
-        </span>
-
-      </div>
-
-
-      <div class="stat">
-
-        <strong>Tiempo</strong>
-
-        <span>
-          {{ formatoTiempo(tiempoTranscurrido) }}
-        </span>
-
-      </div>
-
-    </div>
-
-
-    <!-- ================================= -->
-    <!-- RULETA -->
-    <!-- ================================= -->
-
-    <div class="roulette-area">
-
-      <div class="pointer">
-        ▼
-      </div>
-
-
-      <div
-        class="roulette"
-
-        :style="{
-          transform: `rotate(${angulo}deg)`
-        }"
-      >
-
-        <div
-          v-for="(
-            pregunta,
-            index
-          ) in preguntas"
-
-          :key="pregunta.id"
-
-          class="roulette-section"
-
-          :style="{
-            transform:
-              `rotate(${
-                index *
-                (360 / preguntas.length)
-              }deg)`,
-
-            backgroundColor:
-              colores[
-                index %
-                colores.length
-              ]
-          }"
-        >
-
-          <span>
-
-            {{ pregunta.categoria }}
-
-          </span>
-
-        </div>
-
-      </div>
-
-    </div>
-
-
-    <!-- ================================= -->
-    <!-- BOTÓN GIRAR -->
-    <!-- ================================= -->
-
-    <button
-      v-if="
-        !preguntaActual &&
-        !juegoTerminado
-      "
-
-      class="spin-button"
-
-      :disabled="girando"
-
-      @click="girarRuleta"
-    >
-
-      {{
-        girando
-          ? 'Girando...'
-          : '🎡 Girar ruleta'
-      }}
-
-    </button>
-
-
-    <!-- ================================= -->
-    <!-- PREGUNTA -->
-    <!-- ================================= -->
-
-    <section
-      v-if="preguntaActual"
-
-      class="question-card"
-    >
-
-      <div class="category">
-
-        {{ preguntaActual.categoria }}
-
-      </div>
-
-
-      <h2>
-        {{ preguntaActual.pregunta }}
-      </h2>
-
-
-      <div class="options">
-
-        <button
-          v-for="(
-            opcion,
-            index
-          ) in preguntaActual.opciones"
-
-          :key="index"
-
-          class="option"
-
-          :class="{
-
-            seleccionada:
-              respuestaSeleccionada ===
-              index,
-
-            correcta:
-              respuestaRespondida &&
-              index ===
-                preguntaActual.respuesta,
-
-            incorrecta:
-              respuestaRespondida &&
-              respuestaSeleccionada ===
-                index &&
-              index !==
-                preguntaActual.respuesta
-
-          }"
-
-          :disabled="
-            respuestaRespondida
-          "
-
-          @click="
-            seleccionarRespuesta(
-              index
-            )
-          "
-        >
-
-          <span class="option-letter">
-
-            {{
-              String.fromCharCode(
-                65 + index
-              )
-            }}
-
-          </span>
-
-          <span>
-            {{ opcion }}
-          </span>
-
-        </button>
-
-      </div>
-
-
-      <!-- ================================= -->
-      <!-- COMPROBAR -->
-      <!-- ================================= -->
-
-      <button
-        v-if="
-          !respuestaRespondida
-        "
-
-        class="check-button"
-
-        :disabled="
-          respuestaSeleccionada === null
-        "
-
-        @click="
-          comprobarRespuesta
-        "
-      >
-
-        Comprobar respuesta
-
-      </button>
-
-
-      <!-- ================================= -->
-      <!-- SIGUIENTE -->
-      <!-- ================================= -->
-
-      <button
-        v-if="
-          respuestaRespondida &&
-          !juegoTerminado
-        "
-
-        class="next-button"
-
-        @click="
-          siguientePregunta
-        "
-      >
-
-        🎡 Siguiente pregunta
-
-      </button>
-
-    </section>
-
-
-    <!-- ================================= -->
-    <!-- MENSAJE -->
-    <!-- ================================= -->
+    <!-- CARGANDO -->
 
     <div
-      v-if="mensaje"
-
-      class="message"
-
-      :class="
-        respuestaCorrecta
-          ? 'correcto'
-          : 'incorrecto'
-      "
+      v-if="cargando"
+      class="estado"
     >
-
-      {{ mensaje }}
-
+      Cargando preguntas...
     </div>
 
 
-    <!-- ================================= -->
-    <!-- FINAL -->
-    <!-- ================================= -->
+    <!-- ERROR -->
 
-    <section
-      v-if="juegoTerminado"
-
-      class="game-over"
+    <div
+      v-else-if="errorCarga"
+      class="estado error"
     >
-
-      <h2>
-        🎉 ¡Ruleta terminada!
-      </h2>
-
-      <p>
-        Has respondido todas las preguntas.
-      </p>
+      {{ errorCarga }}
+    </div>
 
 
-      <div class="final-stats">
+    <!-- JUEGO -->
 
-        <div>
+    <main v-else>
 
-          <strong>Aciertos</strong>
+      <!-- ESTADÍSTICAS -->
 
-          <span>
-            {{ aciertos }}
-          </span>
+      <section class="estadisticas">
+
+        <div class="estadistica">
+          <span>Aciertos</span>
+          <strong>{{ aciertos }}</strong>
+        </div>
+
+        <div class="estadistica">
+          <span>Errores</span>
+          <strong>{{ errores }}</strong>
+        </div>
+
+        <div class="estadistica">
+          <span>Puntuación</span>
+          <strong>{{ puntuacion }}</strong>
+        </div>
+
+        <div class="estadistica">
+          <span>Progreso</span>
+          <strong>{{ progreso }}%</strong>
+        </div>
+
+        <div class="estadistica">
+          <span>Tiempo</span>
+          <strong>{{ tiempoFormateado }}</strong>
+        </div>
+
+      </section>
+
+
+      <!-- RULETA -->
+
+      <section class="zona-ruleta">
+
+        <div class="flecha"></div>
+
+        <div
+          class="ruleta"
+          :style="{
+            background: fondoRuleta,
+            transform: `rotate(${rotacion}deg)`
+          }"
+        >
+
+          <div
+            v-for="(pregunta, index) in preguntas"
+            :key="pregunta.id"
+            class="etiqueta"
+            :style="estiloEtiqueta(index)"
+          >
+            {{ pregunta.categoria }}
+          </div>
 
         </div>
 
 
-        <div>
+        <button
+          class="boton-girar"
+          :disabled="girando"
+          @click="girarRuleta"
+        >
+          {{ girando ? 'Girando...' : '🎡 Girar ruleta' }}
+        </button>
 
-          <strong>Errores</strong>
-
-          <span>
-            {{ errores }}
-          </span>
-
-        </div>
-
-
-        <div>
-
-          <strong>Puntuación</strong>
-
-          <span>
-            {{ puntuacion }}
-          </span>
-
-        </div>
+      </section>
 
 
-        <div>
+      <!-- PREGUNTA -->
 
-          <strong>Tiempo</strong>
-
-          <span>
-            {{ formatoTiempo(tiempoTranscurrido) }}
-          </span>
-
-        </div>
-
-      </div>
-
-
-      <button
-        class="restart-button"
-
-        @click="
-          reiniciarJuego
-        "
+      <section
+        v-if="preguntaSeleccionada"
+        class="pregunta-card"
       >
 
-        🔄 Jugar nuevamente
+        <span class="categoria">
+          {{ preguntaSeleccionada.categoria }}
+        </span>
 
-      </button>
+        <h2>
+          {{ preguntaSeleccionada.pregunta }}
+        </h2>
 
-    </section>
+
+        <div class="opciones">
+
+          <button
+            v-for="(opcion, index) in preguntaSeleccionada.opciones"
+            :key="index"
+            class="opcion"
+            :class="claseOpcion(index)"
+            :disabled="respondida"
+            @click="seleccionarRespuesta(index)"
+          >
+
+            <span class="letra">
+              {{ ['A', 'B', 'C', 'D'][index] }}
+            </span>
+
+            {{ opcion }}
+
+          </button>
+
+        </div>
+
+
+        <button
+          v-if="!respondida"
+          class="comprobar"
+          :disabled="respuestaSeleccionada === null"
+          @click="comprobarRespuesta"
+        >
+          Comprobar respuesta
+        </button>
+
+
+        <div
+          v-if="mensaje"
+          class="mensaje"
+        >
+          {{ mensaje }}
+        </div>
+
+
+        <button
+          v-if="respondida"
+          class="otra"
+          @click="girarRuleta"
+        >
+          🎡 Girar nuevamente
+        </button>
+
+      </section>
+
+
+      <!-- REINICIAR -->
+
+      <section class="acciones">
+
+        <button
+          class="reiniciar"
+          @click="reiniciarJuego"
+        >
+          🔄 Nuevo juego
+        </button>
+
+      </section>
+
+    </main>
 
   </div>
-
 </template>
-
 
 <style scoped>
 
-/* ========================================
-   CONTENEDOR
-======================================== */
-
-.game {
-
-  max-width: 1000px;
-
-  margin: 40px auto;
-
-  padding: 20px;
-
-  text-align: center;
-
+* {
+  box-sizing: border-box;
 }
 
+.roulette-page {
+  min-height: 100vh;
+  padding: 30px;
 
-.game-header {
+  background: #f8fafc;
 
-  margin-bottom: 25px;
+  color: #0f172a;
 
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
 }
 
+/* ============================= */
+/* HEADER */
+/* ============================= */
 
-/* ========================================
-   ESTADÍSTICAS
-======================================== */
+.header {
+  max-width: 1150px;
 
-.stats {
+  margin: 0 auto 30px;
 
   display: flex;
-
-  justify-content: center;
-
-  flex-wrap: wrap;
-
-  gap: 12px;
-
-  margin: 25px 0;
-
-}
-
-
-.stat {
-
-  min-width: 105px;
-
-  padding: 12px 16px;
-
-  display: flex;
-
-  flex-direction: column;
-
   align-items: center;
 
-  border: 1px solid #ddd;
+  gap: 30px;
 
-  border-radius: 10px;
+  padding-bottom: 20px;
 
-  background: #f7f7f7;
-
+  border-bottom: 1px solid #e2e8f0;
 }
 
-
-.stat strong {
-
-  font-size: 14px;
-
-  margin-bottom: 5px;
-
-}
-
-
-.stat span {
-
-  font-size: 21px;
-
-  font-weight: bold;
-
-}
-
-
-/* ========================================
-   ÁREA RULETA
-======================================== */
-
-.roulette-area {
-
-  position: relative;
-
-  width: 360px;
-
-  height: 390px;
-
-  margin: 30px auto;
-
-}
-
-
-/* ========================================
-   PUNTERO
-======================================== */
-
-.pointer {
-
-  position: absolute;
-
-  top: -5px;
-
-  left: 50%;
-
-  transform: translateX(-50%);
-
-  z-index: 10;
+.header h1 {
+  margin: 0 0 8px;
 
   font-size: 38px;
-
-  color: #222;
-
 }
 
+.header p {
+  margin: 0;
 
-/* ========================================
-   RULETA
-======================================== */
+  color: #64748b;
 
-.roulette {
-
-  position: absolute;
-
-  top: 30px;
-
-  left: 10px;
-
-  width: 340px;
-
-  height: 340px;
-
-  border-radius: 50%;
-
-  overflow: hidden;
-
-  border: 8px solid #333;
-
-  transition:
-    transform 4.5s
-    cubic-bezier(
-      0.17,
-      0.67,
-      0.12,
-      0.99
-    );
-
-  box-shadow:
-    0 5px 20px
-    rgba(0, 0, 0, 0.2);
-
+  font-size: 18px;
 }
 
-
-/*
-  Cada sección ocupa todo el círculo
-  y se recorta mediante clip-path.
-*/
-
-.roulette-section {
-
-  position: absolute;
-
-  width: 50%;
-
-  height: 50%;
-
-  top: 50%;
-
-  left: 50%;
-
-  transform-origin:
-    0% 0%;
-
-  clip-path:
-    polygon(
-      0 0,
-      100% 0,
-      50% 100%
-    );
-
-  display: flex;
-
-  align-items: flex-start;
-
-  justify-content: center;
-
-}
-
-
-.roulette-section span {
-
-  margin-top: 20px;
-
-  font-size: 12px;
-
-  font-weight: bold;
-
-  color: white;
-
-  transform:
-    rotate(
-      calc(
-        360deg /
-        -6 /
-        2
-      )
-    );
-
-}
-
-
-/* ========================================
-   BOTÓN GIRAR
-======================================== */
-
-.spin-button {
-
-  padding: 14px 28px;
+.volver {
+  padding: 12px 18px;
 
   border: none;
-
   border-radius: 10px;
 
-  font-size: 17px;
-
-  font-weight: bold;
+  background: #e2e8f0;
 
   cursor: pointer;
 
+  font-size: 15px;
+  font-weight: 600;
 }
 
+/* ============================= */
+/* ESTADOS */
+/* ============================= */
 
-.spin-button:disabled {
-
-  opacity: 0.6;
-
-  cursor: default;
-
-}
-
-
-/* ========================================
-   TARJETA DE PREGUNTA
-======================================== */
-
-.question-card {
-
+.estado {
   max-width: 700px;
 
-  margin: 30px auto;
+  margin: 100px auto;
 
-  padding: 25px;
+  padding: 30px;
 
-  border: 1px solid #ddd;
+  text-align: center;
 
-  border-radius: 15px;
+  background: white;
 
-  background: #f9f9f9;
+  border-radius: 16px;
 
+  font-size: 20px;
 }
 
+.estado.error {
+  color: #dc2626;
+}
 
-.category {
+/* ============================= */
+/* ESTADISTICAS */
+/* ============================= */
 
-  display: inline-block;
+.estadisticas {
+  max-width: 1100px;
 
-  padding: 6px 12px;
+  margin: 0 auto 45px;
 
-  margin-bottom: 15px;
+  display: grid;
 
-  border-radius: 20px;
+  grid-template-columns:
+    repeat(5, 1fr);
 
-  background: #e3f2fd;
+  gap: 15px;
+}
+
+.estadistica {
+  padding: 20px;
+
+  background: white;
+
+  border: 1px solid #e2e8f0;
+
+  border-radius: 14px;
+
+  text-align: center;
+}
+
+.estadistica span {
+  display: block;
+
+  margin-bottom: 8px;
+
+  color: #475569;
+
+  font-weight: 600;
+}
+
+.estadistica strong {
+  font-size: 28px;
+}
+
+/* ============================= */
+/* RULETA */
+/* ============================= */
+
+.zona-ruleta {
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  margin-bottom: 50px;
+}
+
+.flecha {
+  width: 0;
+  height: 0;
+
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-top: 38px solid #111827;
+
+  margin-bottom: -5px;
+
+  z-index: 10;
+}
+
+.ruleta {
+  position: relative;
+
+  width: 500px;
+  height: 500px;
+
+  border-radius: 50%;
+
+  border: 12px solid #1f2937;
+
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.15);
+
+  transition:
+    transform 3s
+    cubic-bezier(.17,.67,.19,1);
+
+  overflow: hidden;
+}
+
+.etiqueta {
+  position: absolute;
+
+  left: calc(50% - 65px);
+  top: calc(50% - 15px);
+
+  width: 130px;
+
+  text-align: center;
+
+  color: white;
 
   font-weight: bold;
 
-  font-size: 14px;
+  font-size: 16px;
 
+  transform-origin:
+    65px 15px;
+
+  pointer-events: none;
 }
 
+.boton-girar {
+  margin-top: 30px;
 
-.question-card h2 {
+  padding: 16px 28px;
 
+  border: none;
+  border-radius: 12px;
+
+  background: #2563eb;
+
+  color: white;
+
+  font-size: 18px;
+  font-weight: bold;
+
+  cursor: pointer;
+}
+
+.boton-girar:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.boton-girar:disabled {
+  opacity: .6;
+
+  cursor: not-allowed;
+}
+
+/* ============================= */
+/* PREGUNTA */
+/* ============================= */
+
+.pregunta-card {
+  max-width: 850px;
+
+  margin: 0 auto;
+
+  padding: 30px;
+
+  background: white;
+
+  border-radius: 18px;
+
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.08);
+}
+
+.categoria {
+  display: inline-block;
+
+  margin-bottom: 10px;
+
+  padding: 7px 12px;
+
+  border-radius: 20px;
+
+  background: #dbeafe;
+
+  color: #1d4ed8;
+
+  font-weight: bold;
+}
+
+.pregunta-card h2 {
   margin-bottom: 25px;
 
+  line-height: 1.4;
 }
 
+/* ============================= */
+/* OPCIONES */
+/* ============================= */
 
-/* ========================================
-   OPCIONES
-======================================== */
+.opciones {
+  display: grid;
 
-.options {
+  grid-template-columns:
+    repeat(2, 1fr);
 
-  display: flex;
-
-  flex-direction: column;
-
-  gap: 12px;
-
+  gap: 15px;
 }
 
-
-.option {
-
+.opcion {
   display: flex;
-
   align-items: center;
 
   gap: 12px;
 
-  width: 100%;
+  padding: 18px;
 
-  padding: 14px;
+  border: 2px solid #e2e8f0;
 
-  border: 2px solid #ddd;
-
-  border-radius: 10px;
+  border-radius: 12px;
 
   background: white;
 
@@ -1354,229 +876,152 @@ onUnmounted(() => {
 
   cursor: pointer;
 
-  transition:
-    border-color 0.2s,
-    background-color 0.2s;
-
+  font-size: 16px;
 }
 
+.opcion:hover:not(:disabled) {
+  border-color: #2563eb;
 
-.option:hover:not(:disabled) {
-
-  border-color: #90caf9;
-
+  background: #eff6ff;
 }
 
+.opcion.seleccionada {
+  border-color: #2563eb;
 
-.option.seleccionada {
-
-  border-color: #2196f3;
-
-  background: #e3f2fd;
-
+  background: #dbeafe;
 }
 
+.opcion.correcta {
+  border-color: #16a34a;
 
-.option.correcta {
-
-  border-color: #4caf50;
-
-  background: #e8f5e9;
-
+  background: #dcfce7;
 }
 
+.opcion.incorrecta {
+  border-color: #dc2626;
 
-.option.incorrecta {
-
-  border-color: #f44336;
-
-  background: #ffebee;
-
+  background: #fee2e2;
 }
 
-
-.option:disabled {
-
-  cursor: default;
-
-}
-
-
-/* ========================================
-   LETRA DE OPCIÓN
-======================================== */
-
-.option-letter {
-
+.letra {
   display: flex;
-
+  justify-content: center;
   align-items: center;
 
-  justify-content: center;
-
-  width: 30px;
-
-  height: 30px;
-
-  flex-shrink: 0;
+  min-width: 36px;
+  height: 36px;
 
   border-radius: 50%;
 
-  background: #eeeeee;
+  background: #e2e8f0;
 
   font-weight: bold;
-
 }
 
+/* ============================= */
+/* BOTONES */
+/* ============================= */
 
-/* ========================================
-   BOTONES
-======================================== */
+.comprobar,
+.otra {
+  width: 100%;
 
-.check-button,
-.next-button,
-.restart-button {
-
-  margin-top: 20px;
-
-  padding: 12px 22px;
-
-  border: none;
-
-  border-radius: 8px;
-
-  cursor: pointer;
-
-  font-size: 15px;
-
-}
-
-
-.check-button:disabled {
-
-  opacity: 0.5;
-
-  cursor: default;
-
-}
-
-
-/* ========================================
-   MENSAJE
-======================================== */
-
-.message {
-
-  max-width: 700px;
-
-  margin: 20px auto;
+  margin-top: 25px;
 
   padding: 15px;
 
-  border-radius: 8px;
+  border: none;
+  border-radius: 10px;
 
+  background: #2563eb;
+
+  color: white;
+
+  font-size: 16px;
   font-weight: bold;
 
+  cursor: pointer;
 }
 
+.comprobar:disabled {
+  opacity: .5;
 
-.correcto {
-
-  color: #2e7d32;
-
-  background: #e8f5e9;
-
+  cursor: not-allowed;
 }
 
-
-.incorrecto {
-
-  color: #c62828;
-
-  background: #ffebee;
-
+.otra {
+  background: #7c3aed;
 }
 
+.mensaje {
+  margin-top: 20px;
 
-/* ========================================
-   FINAL
-======================================== */
+  padding: 15px;
 
-.game-over {
+  border-radius: 10px;
 
-  max-width: 600px;
+  background: #f1f5f9;
 
-  margin: 30px auto;
-
-  padding: 30px;
-
-  border: 1px solid #ddd;
-
-  border-radius: 15px;
-
-  background: #f5f5f5;
-
-}
-
-
-.final-stats {
-
-  display: flex;
-
-  justify-content: center;
-
-  flex-wrap: wrap;
-
-  gap: 20px;
-
-  margin: 25px 0;
-
-}
-
-
-.final-stats div {
-
-  min-width: 100px;
-
-  display: flex;
-
-  flex-direction: column;
-
-}
-
-
-.final-stats strong {
-
-  margin-bottom: 5px;
-
-}
-
-
-.final-stats span {
-
-  font-size: 24px;
+  text-align: center;
 
   font-weight: bold;
-
 }
 
+.acciones {
+  margin-top: 35px;
 
-/* ========================================
-   RESPONSIVE
-======================================== */
+  text-align: center;
+}
 
-@media (max-width: 600px) {
+.reiniciar {
+  padding: 12px 20px;
 
-  .roulette-area {
+  border: none;
+  border-radius: 10px;
 
-    transform: scale(0.85);
+  background: #e2e8f0;
 
-    transform-origin: top center;
+  cursor: pointer;
 
-    margin-bottom: -40px;
+  font-weight: bold;
+}
 
+/* ============================= */
+/* RESPONSIVE */
+/* ============================= */
+
+@media (max-width: 750px) {
+
+  .roulette-page {
+    padding: 15px;
   }
 
+  .header {
+    align-items: flex-start;
+  }
+
+  .header h1 {
+    font-size: 28px;
+  }
+
+  .estadisticas {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .ruleta {
+    width: 330px;
+    height: 330px;
+  }
+
+  .etiqueta {
+    transform-origin:
+      65px 15px;
+  }
+
+  .opciones {
+    grid-template-columns: 1fr;
+  }
 }
 
 </style>

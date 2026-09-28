@@ -1,3 +1,4 @@
+
 const express = require('express')
 const cors = require('cors')
 
@@ -5,6 +6,11 @@ const conexion = require('./db')
 
 const app = express()
 const PORT = 3000
+
+
+// ========================================
+// MIDDLEWARES
+// ========================================
 
 app.use(cors())
 app.use(express.json())
@@ -230,6 +236,156 @@ app.post('/api/juegos/:id/palabras-sopa', async (req, res) => {
   } catch (error) {
     console.error(
       'Error al agregar palabra a la sopa:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error interno del servidor'
+    })
+  }
+})
+
+
+// ========================================
+// OBTENER PREGUNTAS DE UN JUEGO
+// ========================================
+
+app.get('/api/juegos/:id/preguntas', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const [preguntas] = await conexion.query(
+      `
+      SELECT
+        id_pregunta,
+        id_juego,
+        pregunta,
+        opcion_a,
+        opcion_b,
+        opcion_c,
+        opcion_d,
+        respuesta_correcta
+      FROM preguntas
+      WHERE id_juego = ?
+      ORDER BY id_pregunta
+      `,
+      [id]
+    )
+
+    res.json(preguntas)
+
+  } catch (error) {
+    console.error(
+      'Error al obtener las preguntas:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al obtener las preguntas'
+    })
+  }
+})
+
+
+// ========================================
+// AGREGAR PREGUNTA A UN JUEGO
+// ========================================
+
+app.post('/api/juegos/:id/preguntas', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const {
+      pregunta,
+      opcion_a,
+      opcion_b,
+      opcion_c,
+      opcion_d,
+      respuesta_correcta
+    } = req.body
+
+    if (
+      !pregunta ||
+      !opcion_a ||
+      !opcion_b ||
+      !opcion_c ||
+      !opcion_d ||
+      !respuesta_correcta
+    ) {
+      return res.status(400).json({
+        mensaje: 'Todos los campos de la pregunta son obligatorios'
+      })
+    }
+
+    const respuesta = respuesta_correcta
+      .toString()
+      .trim()
+      .toUpperCase()
+
+    if (!['A', 'B', 'C', 'D'].includes(respuesta)) {
+      return res.status(400).json({
+        mensaje: 'La respuesta correcta debe ser A, B, C o D'
+      })
+    }
+
+    const [juegos] = await conexion.query(
+      `
+      SELECT id_juego
+      FROM juegos
+      WHERE id_juego = ?
+      `,
+      [id]
+    )
+
+    if (juegos.length === 0) {
+      return res.status(404).json({
+        mensaje: 'El juego no existe'
+      })
+    }
+
+    const [resultado] = await conexion.query(
+      `
+      INSERT INTO preguntas
+      (
+        id_juego,
+        pregunta,
+        opcion_a,
+        opcion_b,
+        opcion_c,
+        opcion_d,
+        respuesta_correcta
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        id,
+        pregunta,
+        opcion_a,
+        opcion_b,
+        opcion_c,
+        opcion_d,
+        respuesta
+      ]
+    )
+
+    res.status(201).json({
+      mensaje: 'Pregunta agregada correctamente',
+
+      pregunta: {
+        id_pregunta: resultado.insertId,
+        id_juego: Number(id),
+        pregunta,
+        opcion_a,
+        opcion_b,
+        opcion_c,
+        opcion_d,
+        respuesta_correcta: respuesta
+      }
+    })
+
+  } catch (error) {
+    console.error(
+      'Error al agregar la pregunta:',
       error.message
     )
 
@@ -571,7 +727,119 @@ app.post('/api/registro', async (req, res) => {
   }
 })
 
+// ========================================
+// OBTENER ENIGMAS DEL JUEGO DETECTIVE
+// ========================================
 
+app.get('/api/juegos/:id/enigmas', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const [enigmas] = await conexion.query(
+      `
+      SELECT
+        id_enigma,
+        id_juego,
+        materia,
+        titulo,
+        respuesta,
+        pista_1,
+        pista_2,
+        pista_3
+      FROM enigmas_detective
+      WHERE id_juego = ?
+      ORDER BY id_enigma
+      `,
+      [id]
+    )
+
+    res.json(enigmas)
+
+  } catch (error) {
+    console.error(
+      'Error al obtener los enigmas:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al obtener los enigmas'
+    })
+  }
+})
+// ========================================
+// OBTENER PAREJAS DEL MEMORAMA
+// ========================================
+
+app.get('/api/juegos/:id/memorama', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const [parejas] = await conexion.query(
+      `
+      SELECT
+        id_pareja,
+        id_juego,
+        elemento_1,
+        elemento_2
+      FROM parejas_memorama
+      WHERE id_juego = ?
+      ORDER BY id_pareja
+      `,
+      [id]
+    )
+
+    res.json(parejas)
+
+  } catch (error) {
+
+    console.error(
+      'Error al obtener las parejas del memorama:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al obtener las parejas del memorama'
+    })
+  }
+})
+// ========================================
+// OBTENER PALABRAS DEL CRUCIGRAMA
+// ========================================
+
+app.get('/api/juegos/:id/crucigrama', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const [palabras] = await conexion.query(
+      `
+      SELECT
+        id_palabra,
+        id_juego,
+        palabra,
+        pista,
+        fila,
+        columna,
+        direccion
+      FROM palabras_crucigrama
+      WHERE id_juego = ?
+      ORDER BY id_palabra
+      `,
+      [id]
+    )
+
+    res.json(palabras)
+
+  } catch (error) {
+    console.error(
+      'Error al obtener las palabras del crucigrama:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al obtener las palabras del crucigrama'
+    })
+  }
+})
 // ========================================
 // INICIAR SERVIDOR
 // ========================================

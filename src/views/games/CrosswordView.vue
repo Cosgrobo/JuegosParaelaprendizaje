@@ -11,43 +11,59 @@ Más adelante estas palabras vendrán
 desde el backend y MySQL.
 */
 
-const palabras = ref([
-  {
-    palabra: 'JAVASCRIPT',
-    pista: 'Lenguaje de programación utilizado para crear páginas web interactivas.',
-    fila: 5,
-    columna: 2,
-    direccion: 'horizontal'
-  },
-  {
-    palabra: 'HTML',
-    pista: 'Lenguaje utilizado para estructurar el contenido de una página web.',
-    fila: 4,
-    columna: 11,
-    direccion: 'vertical'
-  },
-  {
-    palabra: 'MYSQL',
-    pista: 'Sistema de gestión de bases de datos relacionales.',
-    fila: 3,
-    columna: 6,
-    direccion: 'vertical'
-  },
-  {
-    palabra: 'CSS',
-    pista: 'Lenguaje utilizado para dar estilo y diseño a las páginas web.',
-    fila: 5,
-    columna: 7,
-    direccion: 'vertical'
-  },
-  {
-    palabra: 'VUE',
-    pista: 'Framework progresivo de JavaScript utilizado para crear interfaces.',
-    fila: 5,
-    columna: 4,
-    direccion: 'vertical'
+const palabras = ref([])
+const cargando = ref(true)
+const errorCarga = ref('')
+
+const cargarPalabras = async () => {
+  try {
+    cargando.value = true
+    errorCarga.value = ''
+
+    const respuesta = await fetch(
+      'http://localhost:3000/api/juegos/2/crucigrama'
+    )
+
+    if (!respuesta.ok) {
+      throw new Error(
+        `Error HTTP: ${respuesta.status}`
+      )
+    }
+
+    const datos = await respuesta.json()
+
+    palabras.value = datos.map(item => ({
+      id_palabra: item.id_palabra,
+      id_juego: item.id_juego,
+      palabra: item.palabra
+        .trim()
+        .toUpperCase(),
+      pista: item.pista,
+      fila: Number(item.fila),
+      columna: Number(item.columna),
+      direccion: item.direccion
+        .trim()
+        .toLowerCase()
+    }))
+
+    tablero.value = generarTablero()
+
+    console.log(
+      'Palabras cargadas desde MySQL:',
+      palabras.value
+    )
+  } catch (error) {
+    console.error(
+      'Error cargando el crucigrama:',
+      error
+    )
+
+    errorCarga.value =
+      'No se pudieron cargar las palabras del crucigrama.'
+  } finally {
+    cargando.value = false
   }
-])
+}
 
 /*
 ========================================
@@ -121,7 +137,7 @@ const generarTablero = () => {
   return tableroGenerado
 }
 
-const tablero = ref(generarTablero())
+const tablero = ref(crearTablero())
 
 /*
 ========================================
@@ -1031,8 +1047,13 @@ INICIO
 ========================================
 */
 
-onMounted(() => {
-  iniciarJuego()
+onMounted(async () => {
+  await cargarPalabras()
+
+  if (palabras.value.length > 0) {
+    tablero.value = generarTablero()
+    iniciarJuego()
+  }
 })
 
 /*
