@@ -9,21 +9,7 @@
         <span class="title">MemoTIC</span>
       </div>
 
-      <div class="role-switch">
-        <button @click="toggleRole" class="btn-secondary">
-          <i
-            :class="
-              isTeacher
-                ? 'fa-solid fa-chalkboard-user'
-                : 'fa-solid fa-graduation-cap'
-            "
-          ></i>
-
-          <span>
-            Modo: {{ isTeacher ? 'Maestro' : 'Estudiante' }}
-          </span>
-        </button>
-      </div>
+      
     </header>
 
     <!-- TÍTULO PRINCIPAL -->
@@ -160,138 +146,6 @@
 
         </transition>
 
-        <!-- VISTA MAESTRO -->
-        <transition name="fade" mode="out-in">
-
-          <div
-            v-if="isTeacher"
-            class="teacher-panel"
-          >
-
-            <div class="case-card">
-
-              <div class="panel-header">
-
-                <div>
-                  <h2>
-                    Panel del Maestro - MemoTIC
-                  </h2>
-
-                  <p>
-                    Conceptos cargados actualmente
-                    en el memorama.
-                  </p>
-                </div>
-
-                <button
-                  @click="showAddModal = true"
-                  class="btn-primary"
-                >
-                  + Agregar Concepto
-                </button>
-
-              </div>
-
-              <!-- RESULTADOS -->
-              <div class="table-container">
-
-                <h3>Mejores Puntuaciones</h3>
-
-                <table class="data-table">
-
-                  <thead>
-                    <tr>
-                      <th>Posición</th>
-                      <th>Estudiante</th>
-                      <th>Tiempo</th>
-
-                      <th class="text-right">
-                        Puntuación Total
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-
-                    <tr
-                      v-for="(student, idx) in leaderboard"
-                      :key="student.name"
-                    >
-
-                      <td>
-                        {{ idx + 1 }}°
-                      </td>
-
-                      <td>
-                        <strong>
-                          {{ student.name }}
-                        </strong>
-                      </td>
-
-                      <td>
-                        {{ student.time }}
-                      </td>
-
-                      <td class="text-right">
-                        <strong>
-                          {{ student.score }} Pts
-                        </strong>
-                      </td>
-
-                    </tr>
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-              <!-- CONCEPTOS -->
-              <div class="conceptos-list-section">
-
-                <h3>
-                  Conceptos Registrados
-                  ({{ conceptos.length }})
-                </h3>
-
-                <div class="conceptos-grid">
-
-                  <div
-                    v-for="item in conceptos"
-                    :key="item.id"
-                    class="concepto-card"
-                  >
-
-                    <div>
-
-                      <span class="badge">
-                        {{ item.nombre }}
-                      </span>
-
-                      <p class="def-text">
-                        {{ item.definicion }}
-                      </p>
-
-                    </div>
-
-                    <button
-                      @click="deleteConcepto(item)"
-                      class="btn-danger"
-                    >
-                      🗑️
-                    </button>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        </transition>
 
       </template>
 
@@ -309,88 +163,7 @@
 
     </div>
 
-    <!-- MODAL AGREGAR CONCEPTO -->
-    <div
-      v-if="showAddModal"
-      class="modal-overlay"
-    >
 
-      <div class="modal-card large">
-
-        <div class="modal-header">
-
-          <h3>
-            Nuevo Concepto de MemoTIC
-          </h3>
-
-          <button
-            @click="showAddModal = false"
-            class="btn-close"
-          >
-            ✕
-          </button>
-
-        </div>
-
-        <form
-          @submit.prevent="saveNewConcepto"
-          class="form-grid"
-        >
-
-          <div class="form-group">
-
-            <label>
-              Nombre del Concepto
-            </label>
-
-            <input
-              v-model="newForm.nombre"
-              required
-              type="text"
-              placeholder="Ej: CPU"
-            >
-
-          </div>
-
-          <div class="form-group">
-
-            <label>
-              Definición del Concepto
-            </label>
-
-            <textarea
-              v-model="newForm.definicion"
-              required
-              rows="3"
-              placeholder="Ej: Procesador que ejecuta instrucciones..."
-            ></textarea>
-
-          </div>
-
-          <div class="form-actions">
-
-            <button
-              type="button"
-              @click="showAddModal = false"
-              class="btn-secondary"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="submit"
-              class="btn-primary"
-            >
-              Guardar
-            </button>
-
-          </div>
-
-        </form>
-
-      </div>
-
-    </div>
 
   </div>
 </template>
@@ -439,7 +212,7 @@ const errorCarga = ref('')
 // ESTADO GENERAL
 // ========================================
 
-const isTeacher = ref(false)
+
 
 const cartas = ref([])
 
@@ -933,16 +706,7 @@ const reiniciarJuego = () => {
 }
 
 
-// ========================================
-// CAMBIAR MODO
-// ========================================
 
-const toggleRole = () => {
-
-  isTeacher.value =
-    !isTeacher.value
-
-}
 
 
 // ========================================

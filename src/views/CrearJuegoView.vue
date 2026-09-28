@@ -152,6 +152,156 @@
 
         </div>
 
+<!-- ================================= -->
+<!-- CONFIGURACIÓN MEMORAMA -->
+<!-- ================================= -->
+
+<div
+  v-if="tipoSeleccionado === 'Memorama'"
+  class="configuracion-sopa"
+>
+  <h2>Parejas del memorama</h2>
+
+  <p class="ayuda">
+    Agrega los elementos que los alumnos deberán relacionar.
+    Por ejemplo, un concepto con su definición.
+  </p>
+
+  <div
+    v-for="(item, index) in parejasMemorama"
+    :key="index"
+    class="palabra-item"
+  >
+    <div class="numero">
+      {{ index + 1 }}
+    </div>
+
+    <div class="campos-palabra">
+      <input
+        v-model="item.elemento_1"
+        type="text"
+        placeholder="Concepto"
+        required
+      >
+
+      <input
+        v-model="item.elemento_2"
+        type="text"
+        placeholder="Definición o pareja"
+        required
+      >
+    </div>
+
+    <button
+      v-if="parejasMemorama.length > 1"
+      type="button"
+      class="btn-eliminar"
+      @click="eliminarParejaMemorama(index)"
+    >
+      ×
+    </button>
+  </div>
+
+  <button
+    type="button"
+    class="btn-agregar"
+    @click="agregarParejaMemorama"
+  >
+    + Agregar pareja
+  </button>
+</div>
+
+<!-- ================================= -->
+<!-- CONFIGURACIÓN DETECTIVE -->
+<!-- ================================= -->
+
+<div
+  v-if="tipoSeleccionado === 'Detective'"
+  class="configuracion-sopa"
+>
+  <h2>Enigmas del detective</h2>
+
+  <p class="ayuda">
+    Agrega los casos que los alumnos deberán resolver.
+    Cada enigma necesita una materia, un título, una respuesta
+    y tres pistas.
+  </p>
+
+  <div
+    v-for="(item, index) in enigmasDetective"
+    :key="index"
+    class="palabra-item detective-item"
+  >
+    <div class="numero">
+      {{ index + 1 }}
+    </div>
+
+    <div class="campos-palabra campos-detective">
+
+      <input
+        v-model="item.materia"
+        type="text"
+        placeholder="Materia"
+        required
+      >
+
+      <input
+        v-model="item.titulo"
+        type="text"
+        placeholder="Título del caso"
+        required
+      >
+
+      <input
+        v-model="item.respuesta"
+        type="text"
+        placeholder="Respuesta correcta"
+        required
+      >
+
+      <input
+        v-model="item.pista_1"
+        type="text"
+        placeholder="Pista 1 - Contextual (100 pts)"
+        required
+      >
+
+      <input
+        v-model="item.pista_2"
+        type="text"
+        placeholder="Pista 2 - Dato clave (60 pts)"
+        required
+      >
+
+      <input
+        v-model="item.pista_3"
+        type="text"
+        placeholder="Pista 3 - Muy reveladora (30 pts)"
+        required
+      >
+
+    </div>
+
+    <button
+      v-if="enigmasDetective.length > 1"
+      type="button"
+      class="btn-eliminar"
+      @click="eliminarEnigmaDetective(index)"
+    >
+      ×
+    </button>
+
+  </div>
+
+  <button
+    type="button"
+    class="btn-agregar"
+    @click="agregarEnigmaDetective"
+  >
+    + Agregar enigma
+  </button>
+
+</div>
 
         <div
           v-if="['Ruleta', 'Quiz', 'Preguntas'].includes(tipoSeleccionado)"
@@ -292,6 +442,57 @@ const preguntasOpcionMultiple = ref([{
   respuesta_correcta: 'A'
 }])
 
+// ========================================
+// PAREJAS DEL MEMORAMA
+// ========================================
+
+const parejasMemorama = ref([
+  {
+    elemento_1: '',
+    elemento_2: ''
+  }
+])
+
+function agregarParejaMemorama() {
+  parejasMemorama.value.push({
+    elemento_1: '',
+    elemento_2: ''
+  })
+}
+
+function eliminarParejaMemorama(index) {
+  parejasMemorama.value.splice(index, 1)
+}
+
+// ========================================
+// ENIGMAS DEL DETECTIVE
+// ========================================
+
+const enigmasDetective = ref([
+  {
+    materia: '',
+    titulo: '',
+    respuesta: '',
+    pista_1: '',
+    pista_2: '',
+    pista_3: ''
+  }
+])
+
+function agregarEnigmaDetective() {
+  enigmasDetective.value.push({
+    materia: '',
+    titulo: '',
+    respuesta: '',
+    pista_1: '',
+    pista_2: '',
+    pista_3: ''
+  })
+}
+
+function eliminarEnigmaDetective(index) {
+  enigmasDetective.value.splice(index, 1)
+}
 
 // ========================================
 // ESTADO
@@ -478,8 +679,7 @@ async function crearJuego() {
           })
         }
       )
-      const datosCrucigrama = await respuestaCrucigrama.json()
-      if (!respuestaCrucigrama.ok) throw new Error(datosCrucigrama.mensaje || 'No se pudo guardar el crucigrama')
+const datosCrucigrama = await respuestaCrucigrama.json()
 
       } else if (['Ruleta', 'Quiz', 'Preguntas'].includes(tipoSeleccionado.value)) {
         for (const item of preguntasOpcionMultiple.value) {
@@ -504,8 +704,83 @@ async function crearJuego() {
           }
         }
 
-    }
+if (!respuestaCrucigrama.ok) {
+  throw new Error(
+    datosCrucigrama.mensaje ||
+    'No se pudo guardar el crucigrama'
+  )
+}
 
+} else if (tipoSeleccionado.value === 'Memorama') {
+
+  // ==================================
+  // GUARDAR PAREJAS DEL MEMORAMA
+  // ==================================
+
+  const respuestaMemorama = await fetch(
+    `http://localhost:3000/api/juegos/${idJuegoCreado}/memorama`,
+    {
+      method: 'PUT',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      body: JSON.stringify({
+        parejas: parejasMemorama.value.map((item) => ({
+          elemento_1: item.elemento_1.trim(),
+          elemento_2: item.elemento_2.trim()
+        }))
+      })
+    }
+  )
+
+  const datosMemorama = await respuestaMemorama.json()
+
+  if (!respuestaMemorama.ok) {
+    throw new Error(
+      datosMemorama.mensaje ||
+      'No se pudieron guardar las parejas del memorama'
+    )
+  }
+
+} else if (tipoSeleccionado.value === 'Detective') {
+
+  // ==================================
+  // GUARDAR ENIGMAS DEL DETECTIVE
+  // ==================================
+
+  const respuestaDetective = await fetch(
+    `http://localhost:3000/api/juegos/${idJuegoCreado}/enigmas`,
+    {
+      method: 'PUT',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      body: JSON.stringify({
+        enigmas: enigmasDetective.value.map((item) => ({
+          materia: item.materia.trim(),
+          titulo: item.titulo.trim(),
+          respuesta: item.respuesta.trim(),
+          pista_1: item.pista_1.trim(),
+          pista_2: item.pista_2.trim(),
+          pista_3: item.pista_3.trim()
+        }))
+      })
+    }
+  )
+
+  const datosDetective = await respuestaDetective.json()
+
+  if (!respuestaDetective.ok) {
+    throw new Error(
+      datosDetective.mensaje ||
+      'No se pudieron guardar los enigmas del Detective'
+    )
+  }
+}
 
     alert('Juego creado correctamente')
 
@@ -546,6 +821,7 @@ async function crearJuego() {
   }
 
 }
+
 
 
 // ========================================
@@ -740,6 +1016,17 @@ h1 {
   cursor: not-allowed;
 }
 
+/* ================================= */
+/* DETECTIVE */
+/* ================================= */
+
+.campos-detective {
+  grid-template-columns: 1fr 1fr;
+}
+
+.detective-item {
+  align-items: flex-start;
+}
 
 @media (max-width: 650px) {
 
