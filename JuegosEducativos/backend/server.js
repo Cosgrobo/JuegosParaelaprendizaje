@@ -890,6 +890,133 @@ app.get('/api/juegos/:id/enigmas', async (req, res) => {
     })
   }
 })
+
+// ========================================
+// GUARDAR ENIGMAS DEL JUEGO DETECTIVE
+// ========================================
+
+app.put('/api/juegos/:id/enigmas', async (req, res) => {
+  const { id } = req.params
+  const enigmas = req.body.enigmas
+
+  // Comprobar que se haya enviado al menos un enigma
+  if (!Array.isArray(enigmas) || enigmas.length === 0) {
+    return res.status(400).json({
+      mensaje: 'Agrega al menos un enigma al juego Detective'
+    })
+  }
+
+  // Limpiar los datos recibidos
+  const normalizados = enigmas.map((item) => ({
+    materia: String(item.materia || '').trim(),
+    titulo: String(item.titulo || '').trim(),
+    respuesta: String(item.respuesta || '').trim(),
+    pista_1: String(item.pista_1 || '').trim(),
+    pista_2: String(item.pista_2 || '').trim(),
+    pista_3: String(item.pista_3 || '').trim()
+  }))
+
+  // Verificar que ningún campo esté vacío
+  const hayCamposVacios = normalizados.some((item) =>
+    !item.materia ||
+    !item.titulo ||
+    !item.respuesta ||
+    !item.pista_1 ||
+    !item.pista_2 ||
+    !item.pista_3
+  )
+
+  if (hayCamposVacios) {
+    return res.status(400).json({
+      mensaje: 'Todos los campos de los enigmas son obligatorios'
+    })
+  }
+
+  let conexionBD
+
+  try {
+
+    // Comprobar que el juego existe
+    const [juegos] = await conexion.query(
+      'SELECT id_juego FROM juegos WHERE id_juego = ?',
+      [id]
+    )
+
+    if (!juegos.length) {
+      return res.status(404).json({
+        mensaje: 'El juego no existe'
+      })
+    }
+
+    // Obtener una conexión para la transacción
+    conexionBD = await conexion.getConnection()
+
+    await conexionBD.beginTransaction()
+
+    // Eliminar enigmas anteriores
+    await conexionBD.query(
+      'DELETE FROM enigmas_detective WHERE id_juego = ?',
+      [id]
+    )
+
+    // Insertar los nuevos enigmas
+    for (const enigma of normalizados) {
+
+      await conexionBD.query(
+        `
+        INSERT INTO enigmas_detective
+        (
+          id_juego,
+          materia,
+          titulo,
+          respuesta,
+          pista_1,
+          pista_2,
+          pista_3
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          id,
+          enigma.materia,
+          enigma.titulo,
+          enigma.respuesta,
+          enigma.pista_1,
+          enigma.pista_2,
+          enigma.pista_3
+        ]
+      )
+    }
+
+    await conexionBD.commit()
+
+    res.json({
+      mensaje: 'Enigmas del Detective guardados correctamente'
+    })
+
+  } catch (error) {
+
+    if (conexionBD) {
+      await conexionBD.rollback()
+    }
+
+    console.error(
+      'Error al guardar los enigmas del Detective:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al guardar los enigmas del Detective'
+    })
+
+  } finally {
+
+    if (conexionBD) {
+      conexionBD.release()
+    }
+  }
+})
+
 // ========================================
 // OBTENER PAREJAS DEL MEMORAMA
 // ========================================
@@ -924,6 +1051,105 @@ app.get('/api/juegos/:id/memorama', async (req, res) => {
     res.status(500).json({
       mensaje: 'Error al obtener las parejas del memorama'
     })
+  }
+})
+// ========================================
+// GUARDAR PAREJAS DEL MEMORAMA
+// ========================================
+
+app.put('/api/juegos/:id/memorama', async (req, res) => {
+  const { id } = req.params
+  const parejas = req.body.parejas
+
+  if (!Array.isArray(parejas) || parejas.length === 0) {
+    return res.status(400).json({
+      mensaje: 'Agrega al menos una pareja al memorama'
+    })
+  }
+
+  const normalizadas = parejas.map((item) => ({
+    elemento_1: String(item.elemento_1 || '').trim(),
+    elemento_2: String(item.elemento_2 || '').trim()
+  }))
+
+  if (
+    normalizadas.some(
+      (item) => !item.elemento_1 || !item.elemento_2
+    )
+  ) {
+    return res.status(400).json({
+      mensaje: 'Todos los elementos de las parejas son obligatorios'
+    })
+  }
+
+  let conexionBD
+
+  try {
+    const [juegos] = await conexion.query(
+      'SELECT id_juego FROM juegos WHERE id_juego = ?',
+      [id]
+    )
+
+    if (!juegos.length) {
+      return res.status(404).json({
+        mensaje: 'El juego no existe'
+      })
+    }
+
+    conexionBD = await conexion.getConnection()
+
+    await conexionBD.beginTransaction()
+
+    await conexionBD.query(
+      'DELETE FROM parejas_memorama WHERE id_juego = ?',
+      [id]
+    )
+
+    for (const pareja of normalizadas) {
+      await conexionBD.query(
+        `
+        INSERT INTO parejas_memorama
+        (
+          id_juego,
+          elemento_1,
+          elemento_2
+        )
+        VALUES (?, ?, ?)
+        `,
+        [
+          id,
+          pareja.elemento_1,
+          pareja.elemento_2
+        ]
+      )
+    }
+
+    await conexionBD.commit()
+
+    res.json({
+      mensaje: 'Parejas del memorama guardadas correctamente'
+    })
+
+  } catch (error) {
+
+    if (conexionBD) {
+      await conexionBD.rollback()
+    }
+
+    console.error(
+      'Error al guardar las parejas del memorama:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al guardar las parejas del memorama'
+    })
+
+  } finally {
+
+    if (conexionBD) {
+      conexionBD.release()
+    }
   }
 })
 // ========================================

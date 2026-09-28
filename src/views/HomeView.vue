@@ -148,7 +148,7 @@ onMounted(() => {
                         : juego.tipo === 'Preguntas'
                           ? '/juegos/preguntas'
                           : juego.tipo === 'Detective'
-                            ? '/juegos/detective'
+                            ? `/juegos/detective/${juego.id_juego}`
                             : '#'
               "
             />

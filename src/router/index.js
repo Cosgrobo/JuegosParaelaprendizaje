@@ -89,11 +89,11 @@ const router = createRouter({
       name: 'preguntas',
       component: QuizView
     },
-    {
-  path: '/juegos/detective',
-  name: 'DetectiveView',
+{
+  path: '/juegos/detective/:id',
+  name: 'detective',
   component: DetectiveView
-    }
+}
   ]
 })
 
