@@ -7,7 +7,7 @@ import {
 } from 'vue'
 
 import { useRoute } from 'vue-router'
-
+import BackToMenu from '../../components/BackToMenu.vue'
 
 // ==========================================
 // RUTA
@@ -177,6 +177,7 @@ const generarTablero = () => {
   // ========================================
 
   const direcciones = [
+
     {
       fila: 0,
       columna: 1
@@ -191,6 +192,7 @@ const generarTablero = () => {
       fila: 1,
       columna: 1
     }
+
   ]
 
 
@@ -439,10 +441,110 @@ const iniciarJuego = () => {
 
 
 // ==========================================
+// GUARDAR RESULTADO
+// ==========================================
+
+const guardarResultado = async () => {
+
+  try {
+
+    const usuarioGuardado =
+      localStorage.getItem('usuario')
+
+    if (!usuarioGuardado) {
+
+      console.error(
+        'No se encontró el usuario en localStorage'
+      )
+
+      return
+
+    }
+
+    const usuario =
+      JSON.parse(usuarioGuardado)
+
+
+    const respuesta = await fetch(
+      'http://localhost:3000/api/resultados',
+      {
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json'
+        },
+
+        body: JSON.stringify({
+
+          id_usuario:
+            usuario.id_usuario,
+
+          id_juego:
+            Number(idJuego),
+
+          hora_inicio:
+            horaInicio.value
+              .toTimeString()
+              .slice(0, 8),
+
+          hora_fin:
+            horaFin.value
+              .toTimeString()
+              .slice(0, 8),
+
+          tiempo_transcurrido:
+            tiempoTranscurrido.value,
+
+          aciertos:
+            aciertos.value,
+
+          errores:
+            errores.value,
+
+          puntuacion:
+            puntuacion.value
+
+        })
+      }
+    )
+
+
+    const datos =
+      await respuesta.json()
+
+
+    if (!respuesta.ok) {
+
+      throw new Error(
+        datos.mensaje ||
+        'No se pudo guardar el resultado'
+      )
+
+    }
+
+
+    console.log(
+      'Resultado guardado correctamente:',
+      datos
+    )
+
+  } catch (error) {
+
+    console.error(
+      'Error al guardar el resultado:',
+      error
+    )
+
+  }
+
+}
+
+
+// ==========================================
 // FINALIZAR JUEGO
 // ==========================================
 
-const finalizarJuego = () => {
+const finalizarJuego = async () => {
 
   if (
     juegoTerminado.value
@@ -468,6 +570,9 @@ const finalizarJuego = () => {
 
   temporizador =
     null
+
+
+  await guardarResultado()
 
 }
 
@@ -1007,6 +1112,8 @@ onUnmounted(() => {
 <template>
 
   <div class="game">
+
+    <BackToMenu />
 
     <h1>Sopa de letras</h1>
 

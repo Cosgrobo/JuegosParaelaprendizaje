@@ -11,6 +11,19 @@ async function probarConexion() {
   try {
     const conexionBD = await conexion.getConnection()
 
+    await conexionBD.query(`
+      CREATE TABLE IF NOT EXISTS palabras_crucigrama (
+        id_palabra INT AUTO_INCREMENT PRIMARY KEY,
+        id_juego INT NOT NULL,
+        palabra VARCHAR(60) NOT NULL,
+        pista VARCHAR(255) NOT NULL,
+        fila INT NOT NULL,
+        columna INT NOT NULL,
+        direccion ENUM('horizontal', 'vertical') NOT NULL,
+        INDEX idx_crucigrama_juego (id_juego)
+      )
+    `)
+
     console.log('✅ Conectado correctamente a MySQL')
 
     conexionBD.release()

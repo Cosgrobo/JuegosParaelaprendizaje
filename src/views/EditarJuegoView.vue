@@ -9,6 +9,9 @@ const nombre = ref('')
 const descripcion = ref('')
 const instrucciones = ref('')
 const activo = ref(true)
+const tipo = ref('')
+const palabrasSopa = ref([])
+const palabrasCrucigrama = ref([])
 
 const cargando = ref(true)
 const guardando = ref(false)
@@ -32,6 +35,15 @@ const obtenerJuego = async () => {
     descripcion.value = juego.descripcion
     instrucciones.value = juego.instrucciones
     activo.value = Boolean(juego.activo)
+    tipo.value = juego.tipo
+    if (tipo.value === 'Sopa de letras') {
+      const contenido = await fetch(`http://localhost:3000/api/juegos/${route.params.id}/palabras-sopa`)
+      palabrasSopa.value = await contenido.json()
+    } else if (tipo.value === 'Crucigrama') {
+      const contenido = await fetch(`http://localhost:3000/api/juegos/${route.params.id}/crucigrama`)
+      const datos = await contenido.json()
+      palabrasCrucigrama.value = datos.map((item) => ({ ...item, fila: Number(item.fila) + 1, columna: Number(item.columna) + 1 }))
+    }
 
   } catch (error) {
 
@@ -82,6 +94,18 @@ const guardarCambios = async () => {
       return
     }
 
+    if (tipo.value === 'Sopa de letras' || tipo.value === 'Crucigrama') {
+      const endpoint = tipo.value === 'Sopa de letras' ? 'palabras-sopa' : 'crucigrama'
+      const contenido = tipo.value === 'Sopa de letras'
+        ? { palabras: palabrasSopa.value }
+        : { palabras: palabrasCrucigrama.value.map((item) => ({ ...item, fila: item.fila - 1, columna: item.columna - 1 })) }
+      const respuestaContenido = await fetch(`http://localhost:3000/api/juegos/${route.params.id}/${endpoint}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(contenido)
+      })
+      const datosContenido = await respuestaContenido.json()
+      if (!respuestaContenido.ok) throw new Error(datosContenido.mensaje || 'No se pudo guardar el contenido del juego')
+    }
+
     mensaje.value = 'Juego actualizado correctamente'
     tipoMensaje.value = 'exito'
 
@@ -93,7 +117,7 @@ const guardarCambios = async () => {
 
     console.error(error)
 
-    mensaje.value = 'No se pudo conectar con el servidor'
+    mensaje.value = error.message || 'No se pudo conectar con el servidor'
     tipoMensaje.value = 'error'
 
   } finally {
@@ -179,6 +203,32 @@ onMounted(() => {
 
         </div>
 
+        <div class="campo"><label>Tipo de juego</label><input :value="tipo" disabled></div>
+
+        <section v-if="tipo === 'Sopa de letras'" class="contenido-editor">
+          <h2>Palabras de la sopa</h2>
+          <div v-for="(item, index) in palabrasSopa" :key="index" class="fila-editor">
+            <input v-model="item.palabra" maxlength="10" placeholder="Palabra" required>
+            <input v-model="item.pista" placeholder="Pista opcional">
+            <button v-if="palabrasSopa.length > 1" type="button" @click="palabrasSopa.splice(index, 1)">Quitar</button>
+          </div>
+          <button type="button" @click="palabrasSopa.push({ palabra: '', pista: '' })">+ Agregar palabra</button>
+        </section>
+
+        <section v-if="tipo === 'Crucigrama'" class="contenido-editor">
+          <h2>Palabras del crucigrama</h2>
+          <p>Usa filas 1–10 y columnas 1–15. Los cruces deben compartir la misma letra.</p>
+          <div v-for="(item, index) in palabrasCrucigrama" :key="index" class="fila-editor">
+            <input v-model="item.palabra" placeholder="Respuesta" required>
+            <input v-model="item.pista" placeholder="Pista" required>
+            <label>Fila <input v-model.number="item.fila" type="number" min="1" max="10" required></label>
+            <label>Columna <input v-model.number="item.columna" type="number" min="1" max="15" required></label>
+            <select v-model="item.direccion"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select>
+            <button v-if="palabrasCrucigrama.length > 1" type="button" @click="palabrasCrucigrama.splice(index, 1)">Quitar</button>
+          </div>
+          <button type="button" @click="palabrasCrucigrama.push({ palabra: '', pista: '', fila: 1, columna: 1, direccion: 'horizontal' })">+ Agregar palabra</button>
+        </section>
+
         <div class="activo">
 
           <input
@@ -229,6 +279,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.contenido-editor{margin:24px 0;padding:20px;background:#f8fafc;border-radius:12px}.fila-editor{display:flex;gap:10px;margin:10px 0;align-items:center;flex-wrap:wrap}.fila-editor input{flex:1;min-width:130px;padding:10px}.fila-editor label{display:grid;gap:4px}.fila-editor label input{width:75px;min-width:0}
 
 .editar {
   min-height: 100vh;
@@ -239,7 +290,7 @@ onMounted(() => {
 
   padding: 30px;
 
-  background: #f4f6f8;
+  background: linear-gradient(145deg, #f4f6ff, #ecfeff);
 }
 
 .editar-card {
@@ -250,7 +301,7 @@ onMounted(() => {
 
   background: white;
 
-  border-radius: 16px;
+  border-radius: 26px;
 
   box-shadow:
     0 5px 20px rgba(0, 0, 0, 0.08);
@@ -313,7 +364,7 @@ textarea {
 
 input:focus,
 textarea:focus {
-  border-color: #2563eb;
+  border-color: #4f46e5;
 
   box-shadow:
     0 0 0 3px rgba(37, 99, 235, 0.1);
@@ -360,13 +411,13 @@ textarea:focus {
 }
 
 .guardar {
-  background: #2563eb;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
 
   color: white;
 }
 
 .guardar:hover {
-  background: #1d4ed8;
+  background: linear-gradient(135deg, #3730a3, #4f46e5);
 }
 
 .guardar:disabled {

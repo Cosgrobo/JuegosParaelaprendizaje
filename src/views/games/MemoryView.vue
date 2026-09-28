@@ -1,6 +1,7 @@
 <template>
-  <div class="memory-container">
 
+  <div class="memory-container">
+<BackToMenu />
     <!-- BARRA SUPERIOR Y CONMUTADOR DE ROL -->
     <header class="memory-header">
       <div class="brand">
@@ -403,7 +404,7 @@ import {
   onMounted,
   onUnmounted
 } from 'vue'
-
+import BackToMenu from '../../components/BackToMenu.vue'
 
 // ========================================
 // API DEL MEMORAMA
@@ -1722,3 +1723,4 @@ onUnmounted(() => {
 }
 
 </style>
+

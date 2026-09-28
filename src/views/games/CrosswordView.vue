@@ -1,6 +1,10 @@
 ```vue
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import BackToMenu from '../../components/BackToMenu.vue'
+
+const route = useRoute()
 
 /*
 ========================================
@@ -21,7 +25,7 @@ const cargarPalabras = async () => {
     errorCarga.value = ''
 
     const respuesta = await fetch(
-      'http://localhost:3000/api/juegos/2/crucigrama'
+      `http://localhost:3000/api/juegos/${route.params.id || 2}/crucigrama`
     )
 
     if (!respuesta.ok) {
@@ -462,8 +466,7 @@ const seleccionarPalabra = (palabra) => {
 
   palabraActiva.value = palabra
 
-  mensaje.value =
-    `Resolviendo: ${palabra.palabra}`
+  mensaje.value = ''
 
   respuestaCorrecta.value = false
 
@@ -1075,6 +1078,8 @@ onUnmounted(() => {
 
   <div class="game">
 
+    <BackToMenu />
+
     <header class="game-header">
 
       <h1>✏️ Crucigrama</h1>
@@ -1146,24 +1151,6 @@ onUnmounted(() => {
         </span>
 
       </div>
-
-    </div>
-
-
-    <!-- ================================= -->
-    <!-- PALABRA ACTIVA -->
-    <!-- ================================= -->
-
-    <div
-      v-if="palabraActiva"
-      class="active-word"
-    >
-
-      Palabra seleccionada:
-
-      <strong>
-        {{ palabraActiva.palabra }}
-      </strong>
 
     </div>
 
@@ -1584,27 +1571,6 @@ onUnmounted(() => {
   font-size: 21px;
 
   font-weight: bold;
-
-}
-
-
-/* ========================================
-   PALABRA ACTIVA
-======================================== */
-
-.active-word {
-
-  display: inline-block;
-
-  margin: 15px auto;
-
-  padding: 10px 18px;
-
-  border-radius: 8px;
-
-  background: #e3f2fd;
-
-  border: 1px solid #90caf9;
 
 }
 

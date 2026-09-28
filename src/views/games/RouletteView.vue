@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import BackToMenu from '../../components/BackToMenu.vue'
 
 const router = useRouter()
 
@@ -373,13 +374,17 @@ onUnmounted(() => {
 <template>
   <div class="roulette-page">
 
+    <BackToMenu />
+
+    <!-- ================================= -->
     <!-- ENCABEZADO -->
+    <!-- ================================= -->
 
     <header class="header">
 
       <button
         class="volver"
-        @click="router.push('/')"
+        @click="router.push('/home')"
       >
         ← Volver
       </button>

@@ -193,7 +193,7 @@ const irARegistro = () => {
 
   border: 1px solid #e2e8f0;
 
-  border-radius: 22px;
+  border-radius: 30px;
 
   box-shadow:
     0 20px 45px rgba(30, 58, 95, 0.10);
@@ -217,7 +217,7 @@ const irARegistro = () => {
   align-items: center;
   justify-content: center;
 
-  background: #eff6ff;
+  background: linear-gradient(145deg, #eef2ff, #ecfeff);
 
   border-radius: 20px;
 
@@ -230,7 +230,7 @@ const irARegistro = () => {
 .encabezado h1 {
   margin: 0;
 
-  color: #1e3a5f;
+  color: #312e81;
 
   font-size: 27px;
   font-weight: 700;
@@ -317,7 +317,7 @@ input::placeholder {
 input:focus {
   background: #ffffff;
 
-  border-color: #2563eb;
+  border-color: #4f46e5;
 
   box-shadow:
     0 0 0 3px rgba(37, 99, 235, 0.12);
@@ -334,7 +334,7 @@ input:focus {
 
   border-radius: 10px;
 
-  background: #2563eb;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
 
   color: white;
 
@@ -350,7 +350,7 @@ input:focus {
 }
 
 .login-button:hover {
-  background: #1d4ed8;
+  background: linear-gradient(135deg, #3730a3, #4f46e5);
 
   transform: translateY(-1px);
 
@@ -415,7 +415,7 @@ input:focus {
 
   background: transparent;
 
-  color: #2563eb;
+  color: #4f46e5;
 
   font-size: 14px;
   font-weight: 600;
@@ -428,9 +428,9 @@ input:focus {
 }
 
 .registro-button:hover {
-  background: #eff6ff;
+  background: #eef2ff;
 
-  color: #1d4ed8;
+  color: #3730a3;
 }
 
 /* Adaptación para pantallas pequeñas */

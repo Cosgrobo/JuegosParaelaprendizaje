@@ -1,5 +1,6 @@
 <template>
   <div class="detective-container">
+    <BackToMenu />
     
     <!-- BARRA SUPERIOR Y CONMUTADOR DE ROL -->
     <header class="detective-header">
@@ -256,6 +257,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import BackToMenu from '../../components/BackToMenu.vue'
 
 // ========================================
 // DATOS GENERALES

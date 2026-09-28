@@ -1,8 +1,9 @@
 
 const express = require('express')
 const cors = require('cors')
-
 const conexion = require('./db')
+const bcrypt = require('bcrypt')
+
 
 const app = express()
 const PORT = 3000
@@ -245,6 +246,129 @@ app.post('/api/juegos/:id/palabras-sopa', async (req, res) => {
   }
 })
 
+
+// Obtener palabras y posiciones de un crucigrama
+app.get('/api/juegos/:id/crucigrama', async (req, res) => {
+  try {
+    const [palabras] = await conexion.query(`
+      SELECT id_palabra, palabra, pista, fila, columna, direccion
+      FROM palabras_crucigrama
+      WHERE id_juego = ?
+      ORDER BY id_palabra
+    `, [req.params.id])
+
+    res.json(palabras)
+  } catch (error) {
+    console.error('Error al obtener el crucigrama:', error.message)
+    res.status(500).json({ mensaje: 'Error al obtener el crucigrama' })
+  }
+})
+
+// Reemplazar las palabras de una sopa de letras
+app.put('/api/juegos/:id/palabras-sopa', async (req, res) => {
+  const { id } = req.params
+  const palabras = req.body.palabras
+  if (!Array.isArray(palabras) || palabras.length === 0) {
+    return res.status(400).json({ mensaje: 'Agrega al menos una palabra a la sopa' })
+  }
+
+  const normalizadas = palabras.map((item) => ({
+    palabra: String(item.palabra || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z]/g, ''),
+    pista: String(item.pista || '').trim() || null
+  }))
+  if (normalizadas.some((item) => !item.palabra || item.palabra.length > 10)) {
+    return res.status(400).json({ mensaje: 'Cada palabra debe tener entre 1 y 10 letras' })
+  }
+
+  let conexionBD
+  try {
+    const [juegos] = await conexion.query('SELECT id_juego FROM juegos WHERE id_juego = ?', [id])
+    if (!juegos.length) return res.status(404).json({ mensaje: 'El juego no existe' })
+
+    conexionBD = await conexion.getConnection()
+    await conexionBD.beginTransaction()
+    await conexionBD.query('DELETE FROM palabras_sopa WHERE id_juego = ?', [id])
+    for (const item of normalizadas) {
+      await conexionBD.query(
+        'INSERT INTO palabras_sopa (id_juego, palabra, pista) VALUES (?, ?, ?)',
+        [id, item.palabra, item.pista]
+      )
+    }
+    await conexionBD.commit()
+    res.json({ mensaje: 'Palabras de la sopa guardadas correctamente' })
+  } catch (error) {
+    if (conexionBD) await conexionBD.rollback()
+    console.error('Error al guardar las palabras de la sopa:', error.message)
+    res.status(500).json({ mensaje: 'Error al guardar las palabras de la sopa' })
+  } finally {
+    if (conexionBD) conexionBD.release()
+  }
+})
+
+// Reemplazar de forma atómica el contenido de un crucigrama
+app.put('/api/juegos/:id/crucigrama', async (req, res) => {
+  const { id } = req.params
+  const palabras = req.body.palabras
+  if (!Array.isArray(palabras) || palabras.length === 0) {
+    return res.status(400).json({ mensaje: 'Agrega al menos una palabra al crucigrama' })
+  }
+
+  const normalizadas = palabras.map((item) => ({
+    palabra: String(item.palabra || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z]/g, ''),
+    pista: String(item.pista || '').trim(),
+    fila: Number(item.fila),
+    columna: Number(item.columna),
+    direccion: item.direccion
+  }))
+  const invalida = normalizadas.some((item) =>
+    !item.palabra || !item.pista || !Number.isInteger(item.fila) ||
+    !Number.isInteger(item.columna) || item.fila < 0 || item.fila > 9 ||
+    item.columna < 0 || item.columna > 14 ||
+    !['horizontal', 'vertical'].includes(item.direccion) ||
+    (item.direccion === 'horizontal' && item.columna + item.palabra.length > 15) ||
+    (item.direccion === 'vertical' && item.fila + item.palabra.length > 10)
+  )
+  if (invalida) {
+    return res.status(400).json({ mensaje: 'Revisa palabras, pistas y posiciones: deben caber en el tablero de 10 × 15' })
+  }
+
+  const letrasEnTablero = new Map()
+  for (const item of normalizadas) {
+    for (let indice = 0; indice < item.palabra.length; indice++) {
+      const fila = item.fila + (item.direccion === 'vertical' ? indice : 0)
+      const columna = item.columna + (item.direccion === 'horizontal' ? indice : 0)
+      const casilla = `${fila},${columna}`
+      if (letrasEnTablero.has(casilla) && letrasEnTablero.get(casilla) !== item.palabra[indice]) {
+        return res.status(400).json({ mensaje: 'Las palabras se cruzan con letras distintas. Ajusta las posiciones antes de guardar.' })
+      }
+      letrasEnTablero.set(casilla, item.palabra[indice])
+    }
+  }
+
+  let conexionBD
+  try {
+    const [juegos] = await conexion.query('SELECT id_juego FROM juegos WHERE id_juego = ?', [id])
+    if (!juegos.length) return res.status(404).json({ mensaje: 'El juego no existe' })
+
+    conexionBD = await conexion.getConnection()
+    await conexionBD.beginTransaction()
+    await conexionBD.query('DELETE FROM palabras_crucigrama WHERE id_juego = ?', [id])
+    for (const item of normalizadas) {
+      await conexionBD.query(`
+        INSERT INTO palabras_crucigrama (id_juego, palabra, pista, fila, columna, direccion)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [id, item.palabra, item.pista, item.fila, item.columna, item.direccion])
+    }
+    await conexionBD.commit()
+    res.json({ mensaje: 'Crucigrama guardado correctamente' })
+  } catch (error) {
+    if (conexionBD) await conexionBD.rollback()
+    console.error('Error al guardar el crucigrama:', error.message)
+    res.status(500).json({ mensaje: 'Error al guardar el crucigrama' })
+  } finally {
+    if (conexionBD) conexionBD.release()
+  }
+})
 
 // ========================================
 // OBTENER PREGUNTAS DE UN JUEGO
@@ -840,6 +964,175 @@ app.get('/api/juegos/:id/crucigrama', async (req, res) => {
     })
   }
 })
+// ========================================
+// GUARDAR RESULTADO
+// ========================================
+
+app.post('/api/resultados', async (req, res) => {
+  try {
+    const {
+      id_usuario,
+      id_juego,
+      hora_inicio,
+      hora_fin,
+      tiempo_transcurrido,
+      aciertos,
+      errores,
+      puntuacion
+    } = req.body
+
+    if (
+      !id_usuario ||
+      !id_juego ||
+      !hora_inicio ||
+      !hora_fin ||
+      tiempo_transcurrido === undefined ||
+      aciertos === undefined ||
+      errores === undefined ||
+      puntuacion === undefined
+    ) {
+      return res.status(400).json({
+        mensaje: 'Todos los datos del resultado son obligatorios'
+      })
+    }
+
+    // Comprobar usuario
+    const [usuarios] = await conexion.query(
+      `
+      SELECT id_usuario
+      FROM usuarios
+      WHERE id_usuario = ?
+      `,
+      [id_usuario]
+    )
+
+    if (usuarios.length === 0) {
+      return res.status(404).json({
+        mensaje: 'El usuario no existe'
+      })
+    }
+
+    // Comprobar juego
+    const [juegos] = await conexion.query(
+      `
+      SELECT id_juego
+      FROM juegos
+      WHERE id_juego = ?
+      `,
+      [id_juego]
+    )
+
+    if (juegos.length === 0) {
+      return res.status(404).json({
+        mensaje: 'El juego no existe'
+      })
+    }
+
+    // Guardar resultado
+    const [resultado] = await conexion.query(
+      `
+      INSERT INTO resultados
+      (
+        id_usuario,
+        id_juego,
+        fecha,
+        hora_inicio,
+        hora_fin,
+        tiempo_transcurrido,
+        aciertos,
+        errores,
+        puntuacion
+      )
+      VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        id_usuario,
+        id_juego,
+        hora_inicio,
+        hora_fin,
+        tiempo_transcurrido,
+        aciertos,
+        errores,
+        puntuacion
+      ]
+    )
+
+    res.status(201).json({
+      mensaje: 'Resultado guardado correctamente',
+
+      resultado: {
+        id_resultado: resultado.insertId,
+        id_usuario,
+        id_juego,
+        tiempo_transcurrido,
+        aciertos,
+        errores,
+        puntuacion
+      }
+    })
+
+  } catch (error) {
+    console.error(
+      'Error al guardar el resultado:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error interno del servidor'
+    })
+  }
+})
+
+
+// ========================================
+// OBTENER HISTORIAL DE UN USUARIO
+// ========================================
+
+app.get('/api/resultados/usuario/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const [resultados] = await conexion.query(
+      `
+      SELECT
+        r.id_resultado,
+        r.id_usuario,
+        r.id_juego,
+        j.nombre AS juego,
+        t.nombre AS tipo,
+        r.fecha,
+        r.hora_inicio,
+        r.hora_fin,
+        r.tiempo_transcurrido,
+        r.aciertos,
+        r.errores,
+        r.puntuacion
+      FROM resultados r
+      INNER JOIN juegos j
+        ON r.id_juego = j.id_juego
+      INNER JOIN tipos_juego t
+        ON j.id_tipo = t.id_tipo
+      WHERE r.id_usuario = ?
+      ORDER BY r.id_resultado DESC
+      `,
+      [id]
+    )
+
+    res.json(resultados)
+
+  } catch (error) {
+    console.error(
+      'Error al obtener el historial:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al obtener el historial'
+    })
+  }
+})
+
+
 // ========================================
 // INICIAR SERVIDOR
 // ========================================

@@ -34,6 +34,25 @@
           ></textarea>
         </div>
 
+        <div v-if="tipoSeleccionado === 'Crucigrama'" class="configuracion-sopa">
+          <h2>Palabras del crucigrama</h2>
+          <p class="ayuda">Escribe la respuesta y una pista. Indica la casilla inicial (fila 1–10, columna 1–15) y la dirección. Evita que las palabras se crucen con letras distintas.</p>
+          <div v-for="(item, index) in palabrasCrucigrama" :key="index" class="palabra-item">
+            <div class="numero">{{ index + 1 }}</div>
+            <div class="campos-palabra">
+              <input v-model="item.palabra" type="text" placeholder="Respuesta" required>
+              <input v-model="item.pista" type="text" placeholder="Pista" required>
+              <div class="posicion-palabra">
+                <label>Fila <input v-model.number="item.fila" type="number" min="1" max="10" required></label>
+                <label>Columna <input v-model.number="item.columna" type="number" min="1" max="15" required></label>
+                <label>Dirección <select v-model="item.direccion"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label>
+              </div>
+            </div>
+            <button v-if="palabrasCrucigrama.length > 1" type="button" class="btn-eliminar" @click="palabrasCrucigrama.splice(index, 1)">×</button>
+          </div>
+          <button type="button" class="btn-agregar" @click="agregarPalabraCrucigrama">+ Agregar palabra</button>
+        </div>
+
         <!-- Instrucciones -->
         <div class="campo">
           <label>Instrucciones</label>
@@ -201,6 +220,8 @@ const palabras = ref([
   }
 ])
 
+const palabrasCrucigrama = ref([{ palabra: '', pista: '', fila: 1, columna: 1, direccion: 'horizontal' }])
+
 
 // ========================================
 // ESTADO
@@ -277,6 +298,16 @@ function eliminarPalabra(index) {
 
 }
 
+function agregarPalabraCrucigrama() {
+  palabrasCrucigrama.value.push({
+    palabra: '',
+    pista: '',
+    fila: Math.min(palabrasCrucigrama.value.length + 1, 10),
+    columna: 1,
+    direccion: 'horizontal'
+  })
+}
+
 
 // ========================================
 // CREAR JUEGO
@@ -287,6 +318,8 @@ async function crearJuego() {
   if (guardando.value) {
     return
   }
+
+  let idJuegoCreado = null
 
   try {
 
@@ -329,7 +362,7 @@ async function crearJuego() {
     }
 
 
-    const idJuego = datosJuego.juego.id_juego
+    idJuegoCreado = datosJuego.juego.id_juego
 
 
     // ==================================
@@ -337,44 +370,31 @@ async function crearJuego() {
     // ==================================
 
     if (tipoSeleccionado.value === 'Sopa de letras') {
+      const respuestaSopa = await fetch(`http://localhost:3000/api/juegos/${idJuegoCreado}/palabras-sopa`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ palabras: palabras.value.map((item) => ({ palabra: item.palabra.trim(), pista: item.pista.trim() || null })) })
+      })
+      const datosSopa = await respuestaSopa.json()
+      if (!respuestaSopa.ok) throw new Error(datosSopa.mensaje || 'No se pudo guardar la sopa de letras')
 
-      for (const item of palabras.value) {
-
-        if (!item.palabra.trim()) {
-          continue
+    } else if (tipoSeleccionado.value === 'Crucigrama') {
+      const respuestaCrucigrama = await fetch(
+        `http://localhost:3000/api/juegos/${idJuegoCreado}/crucigrama`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            palabras: palabrasCrucigrama.value.map((item) => ({
+              ...item,
+              fila: item.fila - 1,
+              columna: item.columna - 1
+            }))
+          })
         }
-
-        const respuestaPalabra = await fetch(
-          `http://localhost:3000/api/juegos/${idJuego}/palabras-sopa`,
-          {
-            method: 'POST',
-
-            headers: {
-              'Content-Type': 'application/json'
-            },
-
-            body: JSON.stringify({
-              palabra: item.palabra.trim(),
-              pista: item.pista.trim() || null
-            })
-          }
-        )
-
-
-        const datosPalabra =
-          await respuestaPalabra.json()
-
-
-        if (!respuestaPalabra.ok) {
-
-          throw new Error(
-            datosPalabra.mensaje ||
-            'No se pudo guardar una palabra'
-          )
-
-        }
-
-      }
+      )
+      const datosCrucigrama = await respuestaCrucigrama.json()
+      if (!respuestaCrucigrama.ok) throw new Error(datosCrucigrama.mensaje || 'No se pudo guardar el crucigrama')
 
     }
 
@@ -385,6 +405,21 @@ async function crearJuego() {
 
 
   } catch (error) {
+
+    if (idJuegoCreado) {
+      try {
+        const respuestaDesactivacion = await fetch(
+          `http://localhost:3000/api/juegos/${idJuegoCreado}/desactivar`,
+          { method: 'PATCH' }
+        )
+
+        if (!respuestaDesactivacion.ok) {
+          console.error('No se pudo desactivar el juego incompleto')
+        }
+      } catch (errorDesactivacion) {
+        console.error('No se pudo desactivar el juego incompleto:', errorDesactivacion)
+      }
+    }
 
     console.error(
       'Error al crear juego:',
@@ -428,12 +463,16 @@ onMounted(() => {
 
 </script>
 
+<style scoped>
+.posicion-palabra{display:flex;gap:12px;flex-wrap:wrap}.posicion-palabra label{display:grid;gap:4px;font-size:.9rem}.posicion-palabra input{width:85px}.posicion-palabra select{min-width:130px}
+</style>
+
 
 <style scoped>
 
 .crear-juego {
   min-height: 100vh;
-  background: #f5f7fb;
+  background: linear-gradient(145deg, #f4f6ff, #ecfeff);
   padding: 40px 20px;
 }
 
@@ -442,7 +481,7 @@ onMounted(() => {
   margin: 0 auto;
   background: white;
   padding: 35px;
-  border-radius: 15px;
+  border-radius: 26px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
@@ -583,7 +622,7 @@ h1 {
 }
 
 .btn-crear {
-  background: #2563eb;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
   color: white;
 }
 

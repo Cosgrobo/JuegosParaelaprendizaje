@@ -1,6 +1,8 @@
 <script setup>
+
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import BackToMenu from '../../components/BackToMenu.vue'
 
 const router = useRouter()
 
@@ -195,6 +197,8 @@ const regresar = () => {
 <template>
 
   <div class="quiz-page">
+
+    <BackToMenu />
 
     <!-- ================================= -->
     <!-- JUEGO -->
@@ -935,3 +939,4 @@ const regresar = () => {
 }
 
 </style>
+
