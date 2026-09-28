@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import HomeButton from '../components/HomeButton.vue'
 
 const router = useRouter()
 
@@ -72,7 +73,19 @@ const formatearFecha = (fecha) => {
     return 'Sin fecha'
   }
 
-  const fechaLocal = new Date(`${fecha}T00:00:00`)
+  const fechaTexto = String(fecha)
+  const partesFecha = fechaTexto.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const fechaLocal = partesFecha
+    ? new Date(
+      Number(partesFecha[1]),
+      Number(partesFecha[2]) - 1,
+      Number(partesFecha[3])
+    )
+    : new Date(fechaTexto)
+
+  if (Number.isNaN(fechaLocal.getTime())) {
+    return 'Sin fecha'
+  }
 
   return fechaLocal.toLocaleDateString('es-MX', {
     day: '2-digit',
@@ -190,14 +203,7 @@ function cerrarSesion() {
     class="profile-page"
   >
     <header class="profile-navbar">
-      <button
-        class="back-button"
-        type="button"
-        @click="router.push('/home')"
-      >
-        <span aria-hidden="true">←</span>
-        Volver a actividades
-      </button>
+      <HomeButton variant="dark" />
 
       <span class="navbar-title">
         Mi perfil
@@ -470,21 +476,6 @@ function cerrarSesion() {
   padding: 0 40px;
   background: linear-gradient(105deg, #312e81, #4f46e5);
   box-shadow: 0 8px 24px rgba(49, 46, 129, 0.18);
-}
-
-.back-button {
-  padding: 9px 0;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  font: inherit;
-  cursor: pointer;
-}
-
-.back-button span {
-  margin-right: 6px;
-  font-size: 20px;
-  vertical-align: -1px;
 }
 
 .navbar-title {

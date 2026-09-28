@@ -1,5 +1,6 @@
 <template>
   <div class="crear-juego">
+    <HomeButton />
 
     <div class="contenedor">
 
@@ -152,6 +153,66 @@
         </div>
 
 
+        <div
+          v-if="['Ruleta', 'Quiz', 'Preguntas'].includes(tipoSeleccionado)"
+          class="configuracion-sopa"
+        >
+
+          <h2>
+            {{ ['Quiz', 'Preguntas'].includes(tipoSeleccionado) ? 'Preguntas del Quiz' : 'Preguntas de la ruleta' }}
+          </h2>
+
+          <p class="ayuda">
+            Agrega cada pregunta con cuatro opciones y selecciona la respuesta correcta.
+          </p>
+
+          <div
+            v-for="(item, index) in preguntasOpcionMultiple"
+            :key="index"
+            class="palabra-item"
+          >
+
+            <div class="numero">
+              {{ index + 1 }}
+            </div>
+
+            <div class="campos-palabra">
+              <input v-model="item.pregunta" type="text" placeholder="Pregunta" required>
+              <select v-model="item.respuesta_correcta" required aria-label="Respuesta correcta">
+                <option value="A">Correcta: A</option>
+                <option value="B">Correcta: B</option>
+                <option value="C">Correcta: C</option>
+                <option value="D">Correcta: D</option>
+              </select>
+              <input v-model="item.opcion_a" type="text" placeholder="Opción A" required>
+              <input v-model="item.opcion_b" type="text" placeholder="Opción B" required>
+              <input v-model="item.opcion_c" type="text" placeholder="Opción C" required>
+              <input v-model="item.opcion_d" type="text" placeholder="Opción D" required>
+            </div>
+
+            <button
+              v-if="preguntasOpcionMultiple.length > 1"
+              type="button"
+              class="btn-eliminar"
+              :aria-label="`Eliminar pregunta ${index + 1}`"
+              @click="eliminarPreguntaOpcionMultiple(index)"
+            >
+              ×
+            </button>
+
+          </div>
+
+          <button
+            type="button"
+            class="btn-agregar"
+            @click="agregarPreguntaOpcionMultiple"
+          >
+            + Agregar pregunta
+          </button>
+
+        </div>
+
+
         <!-- ================================= -->
         <!-- BOTONES -->
         <!-- ================================= -->
@@ -188,6 +249,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import HomeButton from '../components/HomeButton.vue'
 
 const router = useRouter()
 
@@ -221,6 +283,14 @@ const palabras = ref([
 ])
 
 const palabrasCrucigrama = ref([{ palabra: '', pista: '', fila: 1, columna: 1, direccion: 'horizontal' }])
+const preguntasOpcionMultiple = ref([{
+  pregunta: '',
+  opcion_a: '',
+  opcion_b: '',
+  opcion_c: '',
+  opcion_d: '',
+  respuesta_correcta: 'A'
+}])
 
 
 // ========================================
@@ -306,6 +376,21 @@ function agregarPalabraCrucigrama() {
     columna: 1,
     direccion: 'horizontal'
   })
+}
+
+function agregarPreguntaOpcionMultiple() {
+  preguntasOpcionMultiple.value.push({
+    pregunta: '',
+    opcion_a: '',
+    opcion_b: '',
+    opcion_c: '',
+    opcion_d: '',
+    respuesta_correcta: 'A'
+  })
+}
+
+function eliminarPreguntaOpcionMultiple(index) {
+  preguntasOpcionMultiple.value.splice(index, 1)
 }
 
 
@@ -395,6 +480,29 @@ async function crearJuego() {
       )
       const datosCrucigrama = await respuestaCrucigrama.json()
       if (!respuestaCrucigrama.ok) throw new Error(datosCrucigrama.mensaje || 'No se pudo guardar el crucigrama')
+
+      } else if (['Ruleta', 'Quiz', 'Preguntas'].includes(tipoSeleccionado.value)) {
+        for (const item of preguntasOpcionMultiple.value) {
+          const respuestaPregunta = await fetch(
+            `http://localhost:3000/api/juegos/${idJuegoCreado}/preguntas`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pregunta: item.pregunta.trim(),
+                opcion_a: item.opcion_a.trim(),
+                opcion_b: item.opcion_b.trim(),
+                opcion_c: item.opcion_c.trim(),
+                opcion_d: item.opcion_d.trim(),
+                respuesta_correcta: item.respuesta_correcta
+              })
+            }
+          )
+          const datosPregunta = await respuestaPregunta.json()
+          if (!respuestaPregunta.ok) {
+            throw new Error(datosPregunta.mensaje || 'No se pudo guardar una pregunta de la ruleta')
+          }
+        }
 
     }
 
@@ -566,7 +674,8 @@ h1 {
   flex: 1;
 }
 
-.campos-palabra input {
+.campos-palabra input,
+.campos-palabra select {
   padding: 11px;
   border: 1px solid #ccc;
   border-radius: 7px;

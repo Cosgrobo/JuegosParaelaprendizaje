@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import HomeButton from './HomeButton.vue'
 
 const route = useRoute()
 const titulos = {
@@ -10,7 +11,10 @@ const titulos = {
   ruleta: 'Ruleta de preguntas',
   memorama: 'Memorama',
   preguntas: 'Preguntas',
-  DetectiveView: 'Detective Escolar'
+  DetectiveView: 'Detective Escolar',
+  'crear-juego': 'Crear juego',
+  'editar-juego': 'Editar juego',
+  perfil: 'Mi perfil'
 }
 const tituloPagina = computed(() => titulos[route.name] || 'Juegos Educativos')
 </script>
@@ -18,6 +22,7 @@ const tituloPagina = computed(() => titulos[route.name] || 'Juegos Educativos')
 <template>
   <nav class="game-navbar" aria-label="Navegación del juego">
     <span class="brand">{{ tituloPagina }}</span>
+    <HomeButton variant="dark" />
   </nav>
 </template>
 

@@ -1,10 +1,13 @@
 <script setup>
 
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
+import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
 
 const router = useRouter()
+const route = useRoute()
+const idJuego = computed(() => Number(route.params.id || 5))
 
 // ===============================
 // PREGUNTAS
@@ -12,6 +15,7 @@ const router = useRouter()
 // ===============================
 
 const preguntas = ref([])
+const nombreJuego = ref('')
 const cargando = ref(true)
 const errorCarga = ref('')
 
@@ -20,17 +24,22 @@ const obtenerPreguntas = async () => {
     cargando.value = true
     errorCarga.value = ''
 
-    const respuesta = await fetch(
-      'http://localhost:3000/api/juegos/5/preguntas'
-    )
+    const [respuestaJuego, respuestaPreguntas] = await Promise.all([
+      fetch(`http://localhost:3000/api/juegos/${idJuego.value}`),
+      fetch(`http://localhost:3000/api/juegos/${idJuego.value}/preguntas`)
+    ])
 
-    if (!respuesta.ok) {
-      throw new Error('No se pudieron obtener las preguntas')
+    if (!respuestaJuego.ok || !respuestaPreguntas.ok) {
+      throw new Error('No se pudieron obtener los datos del Quiz')
     }
 
-    const datos = await respuesta.json()
+    const [datosJuego, datosPreguntas] = await Promise.all([
+      respuestaJuego.json(),
+      respuestaPreguntas.json()
+    ])
 
-    preguntas.value = datos
+    nombreJuego.value = datosJuego.nombre
+    preguntas.value = datosPreguntas
 
   } catch (error) {
     console.error('Error al cargar preguntas:', error)
@@ -59,6 +68,8 @@ const errores = ref(0)
 const puntuacion = ref(0)
 
 const juegoTerminado = ref(false)
+const horaInicio = ref(null)
+const resultadoGuardado = ref(false)
 
 // ===============================
 // PREGUNTA ACTUAL
@@ -115,6 +126,10 @@ const progreso = computed(() => {
 const seleccionarRespuesta = (letra) => {
   if (respondida.value) return
 
+  if (!horaInicio.value) {
+    horaInicio.value = new Date()
+  }
+
   respuestaSeleccionada.value = letra
   respondida.value = true
 
@@ -165,6 +180,22 @@ const siguientePregunta = () => {
 
   } else {
     juegoTerminado.value = true
+
+    if (!resultadoGuardado.value) {
+      const horaFin = new Date()
+      const inicio = horaInicio.value || horaFin
+
+      resultadoGuardado.value = true
+      void guardarResultadoPartida({
+        idJuego: idJuego.value,
+        horaInicio: inicio,
+        horaFin,
+        tiempoTranscurrido: Math.floor((horaFin - inicio) / 1000),
+        aciertos: aciertos.value,
+        errores: errores.value,
+        puntuacion: puntuacion.value
+      })
+    }
   }
 }
 
@@ -182,6 +213,8 @@ const reiniciarJuego = () => {
   puntuacion.value = 0
 
   juegoTerminado.value = false
+  horaInicio.value = null
+  resultadoGuardado.value = false
 }
 
 // ===============================
@@ -225,7 +258,7 @@ const regresar = () => {
         </button>
 
         <div>
-          <h1>❓ Quiz TIC</h1>
+          <h1>❓ {{ nombreJuego || 'Quiz TIC' }}</h1>
           <p>
             Pon a prueba tus conocimientos
           </p>

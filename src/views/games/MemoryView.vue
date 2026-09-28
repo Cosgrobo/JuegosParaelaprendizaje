@@ -404,14 +404,20 @@ import {
   onMounted,
   onUnmounted
 } from 'vue'
+import { useRoute } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
+import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
+
+const route = useRoute()
+const idJuego = computed(() => Number(route.params.id || 4))
 
 // ========================================
 // API DEL MEMORAMA
 // ========================================
 
-const API_URL =
-  'http://localhost:3000/api/juegos/4/memorama'
+const API_URL = computed(
+  () => `http://localhost:3000/api/juegos/${idJuego.value}/memorama`
+)
 
 
 // ========================================
@@ -455,6 +461,8 @@ const intentos = ref(0)
 const parejas = ref(0)
 
 const segundos = ref(0)
+const horaInicio = ref(null)
+const resultadoGuardado = ref(false)
 
 let intervalo = null
 
@@ -489,7 +497,7 @@ const fetchConceptos = async () => {
 
     errorCarga.value = ''
 
-    const res = await fetch(API_URL)
+    const res = await fetch(API_URL.value)
 
     if (!res.ok) {
 
@@ -712,6 +720,7 @@ const seleccionarCarta = (carta) => {
   if (!juegoIniciado.value) {
 
     juegoIniciado.value = true
+    horaInicio.value = new Date()
 
     iniciarTemporizador()
 
@@ -811,6 +820,21 @@ const comprobarPareja = () => {
       mensajeEstado.value =
         `🏆 ¡Felicidades! Completaste MemoTIC en ${formattedTime.value} con ${puntos.value} puntos.`
 
+      if (!resultadoGuardado.value) {
+        const horaFin = new Date()
+        resultadoGuardado.value = true
+
+        void guardarResultadoPartida({
+          idJuego: idJuego.value,
+          horaInicio: horaInicio.value || horaFin,
+          horaFin,
+          tiempoTranscurrido: segundos.value,
+          aciertos: parejas.value,
+          errores: Math.max(0, intentos.value - parejas.value),
+          puntuacion: puntos.value
+        })
+      }
+
     }
 
   }
@@ -884,6 +908,10 @@ const reiniciarJuego = () => {
   parejas.value = 0
 
   segundos.value = 0
+
+  horaInicio.value = null
+
+  resultadoGuardado.value = false
 
 
   primeraCarta.value = null

@@ -257,7 +257,12 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
+import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
+
+const route = useRoute()
+const idJuego = computed(() => Number(route.params.id || 6))
 
 // ========================================
 // DATOS GENERALES
@@ -296,6 +301,8 @@ const deductionInput = ref('')
 // ========================================
 
 const secondsElapsed = ref(0)
+const horaInicio = ref(null)
+const resultadoGuardado = ref(false)
 let timerInterval = null
 
 // ========================================
@@ -353,7 +360,7 @@ const obtenerEnigmas = async () => {
     errorCarga.value = ''
 
     const respuesta = await fetch(
-      'http://localhost:3000/api/juegos/6/enigmas'
+      `http://localhost:3000/api/juegos/${idJuego.value}/enigmas`
     )
 
     if (!respuesta.ok) {
@@ -408,6 +415,8 @@ const startTimer = () => {
   if (timerInterval) {
     clearInterval(timerInterval)
   }
+
+  horaInicio.value = new Date()
 
   timerInterval = setInterval(() => {
     secondsElapsed.value++
@@ -561,6 +570,27 @@ const submitDeduction = () => {
 
     deductionInput.value = ''
 
+    if (
+      hits.value === enigmas.value.length &&
+      enigmas.value.length > 0 &&
+      !resultadoGuardado.value
+    ) {
+      const horaFin = new Date()
+      resultadoGuardado.value = true
+      clearInterval(timerInterval)
+      timerInterval = null
+
+      void guardarResultadoPartida({
+        idJuego: idJuego.value,
+        horaInicio: horaInicio.value || horaFin,
+        horaFin,
+        tiempoTranscurrido: secondsElapsed.value,
+        aciertos: hits.value,
+        errores: errors.value,
+        puntuacion: totalScore.value
+      })
+    }
+
   } else {
 
     errors.value++
@@ -632,10 +662,12 @@ const resetCurrentGame = () => {
   solvedMap.value = {}
 
   secondsElapsed.value = 0
+  resultadoGuardado.value = false
 
   currentCaseIndex.value = 0
 
   resetCaseState()
+  startTimer()
 }
 
 // ========================================

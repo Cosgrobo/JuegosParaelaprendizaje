@@ -8,6 +8,7 @@ import {
 
 import { useRoute } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
+import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
 
 // ==========================================
 // RUTA
@@ -90,69 +91,43 @@ const mensaje = ref('')
 
 const respuestaCorrecta = ref(false)
 
+let seleccionEnCurso = false
+
 
 // ==========================================
-// OBTENER PALABRAS DESDE MYSQL
+// OBTENER PALABRAS DESDE EL BACKEND
 // ==========================================
 
 const cargarPalabras = async () => {
-
   try {
-
     cargando.value = true
-
     errorCarga.value = ''
 
     const respuesta = await fetch(
       `http://localhost:3000/api/juegos/${idJuego}/palabras-sopa`
     )
-
     const datos = await respuesta.json()
 
     if (!respuesta.ok) {
-
       throw new Error(
-        datos.mensaje ||
-        'No se pudieron obtener las palabras'
+        datos.mensaje || 'No se pudieron obtener las palabras'
       )
-
     }
 
-    palabras.value = datos.map(
-      item => item.palabra.toUpperCase()
-    )
-
-    pistas.value = datos.map(
-      item => item.pista
-    )
+    palabras.value = datos.map(item => item.palabra.toUpperCase())
+    pistas.value = datos.map(item => item.pista)
 
     if (palabras.value.length === 0) {
-
-      throw new Error(
-        'Este juego todavía no tiene palabras registradas'
-      )
-
+      throw new Error('Este juego todavía no tiene palabras registradas')
     }
 
     tablero.value = generarTablero()
-
   } catch (error) {
-
-    console.error(
-      'Error al cargar las palabras:',
-      error
-    )
-
-    errorCarga.value =
-      error.message ||
-      'No se pudieron cargar las palabras'
-
+    console.error('Error al cargar las palabras:', error)
+    errorCarga.value = error.message || 'No se pudieron cargar las palabras'
   } finally {
-
     cargando.value = false
-
   }
-
 }
 
 
@@ -445,98 +420,15 @@ const iniciarJuego = () => {
 // ==========================================
 
 const guardarResultado = async () => {
-
-  try {
-
-    const usuarioGuardado =
-      localStorage.getItem('usuario')
-
-    if (!usuarioGuardado) {
-
-      console.error(
-        'No se encontró el usuario en localStorage'
-      )
-
-      return
-
-    }
-
-    const usuario =
-      JSON.parse(usuarioGuardado)
-
-
-    const respuesta = await fetch(
-      'http://localhost:3000/api/resultados',
-      {
-        method: 'POST',
-
-        headers: {
-          'Content-Type': 'application/json'
-        },
-
-        body: JSON.stringify({
-
-          id_usuario:
-            usuario.id_usuario,
-
-          id_juego:
-            Number(idJuego),
-
-          hora_inicio:
-            horaInicio.value
-              .toTimeString()
-              .slice(0, 8),
-
-          hora_fin:
-            horaFin.value
-              .toTimeString()
-              .slice(0, 8),
-
-          tiempo_transcurrido:
-            tiempoTranscurrido.value,
-
-          aciertos:
-            aciertos.value,
-
-          errores:
-            errores.value,
-
-          puntuacion:
-            puntuacion.value
-
-        })
-      }
-    )
-
-
-    const datos =
-      await respuesta.json()
-
-
-    if (!respuesta.ok) {
-
-      throw new Error(
-        datos.mensaje ||
-        'No se pudo guardar el resultado'
-      )
-
-    }
-
-
-    console.log(
-      'Resultado guardado correctamente:',
-      datos
-    )
-
-  } catch (error) {
-
-    console.error(
-      'Error al guardar el resultado:',
-      error
-    )
-
-  }
-
+  return guardarResultadoPartida({
+    idJuego: Number(idJuego),
+    horaInicio: horaInicio.value,
+    horaFin: horaFin.value,
+    tiempoTranscurrido: tiempoTranscurrido.value,
+    aciertos: aciertos.value,
+    errores: errores.value,
+    puntuacion: puntuacion.value
+  })
 }
 
 
@@ -581,81 +473,131 @@ const finalizarJuego = async () => {
 // SELECCIONAR LETRA
 // ==========================================
 
-const seleccionarLetra = (
-  letra,
-  fila,
-  columna
-) => {
-
+const iniciarSeleccion = (evento, letra, fila, columna) => {
   if (
+    evento.button !== 0 ||
+    !evento.isPrimary ||
     juegoTerminado.value
   ) {
-
     return
-
   }
 
+  limpiarSeleccion()
+  mensaje.value = ''
+  respuestaCorrecta.value = false
+  seleccionEnCurso = true
 
-  const ultimaCelda =
-    celdasSeleccionadas.value[
-      celdasSeleccionadas.value.length - 1
-    ]
+  agregarCeldasSeleccionadas(letra, fila, columna)
+}
 
+const continuarSeleccion = (letra, fila, columna) => {
+  if (!seleccionEnCurso || juegoTerminado.value) {
+    return
+  }
 
-  if (ultimaCelda) {
+  agregarCeldasSeleccionadas(letra, fila, columna)
+}
 
-    const diferenciaFila =
-      Math.abs(
-        fila -
-        ultimaCelda.fila
-      )
+const agregarCeldasSeleccionadas = (letra, fila, columna) => {
+  const celdas = celdasSeleccionadas.value
 
+  if (celdas.length === 0) {
+    celdas.push({ fila, columna })
+    palabraSeleccionada.value = letra
+    return
+  }
 
-    const diferenciaColumna =
-      Math.abs(
-        columna -
-        ultimaCelda.columna
-      )
+  const indiceExistente = celdas.findIndex(celda =>
+    celda.fila === fila && celda.columna === columna
+  )
 
-
-    if (
-      diferenciaFila > 1 ||
-      diferenciaColumna > 1
-    ) {
-
-      return
-
+  if (indiceExistente !== -1) {
+    if (indiceExistente < celdas.length - 1) {
+      celdasSeleccionadas.value = celdas.slice(0, indiceExistente + 1)
+      palabraSeleccionada.value = celdasSeleccionadas.value
+        .map(celda => tablero.value[celda.fila][celda.columna])
+        .join('')
+      validarSeleccionAutomatica()
     }
 
+    return
   }
 
+  const origen = celdas[0]
+  const diferenciaFila = fila - origen.fila
+  const diferenciaColumna = columna - origen.columna
+  const pasos = Math.max(
+    Math.abs(diferenciaFila),
+    Math.abs(diferenciaColumna)
+  )
 
-  // ========================================
-  // EVITAR REPETIR CELDA
-  // ========================================
+  if (pasos === 0) {
+    return
+  }
+
+  let direccionFila
+  let direccionColumna
+
+  if (celdas.length === 1) {
+    direccionFila = Math.sign(diferenciaFila)
+    direccionColumna = Math.sign(diferenciaColumna)
+  } else {
+    direccionFila = celdas[1].fila - origen.fila
+    direccionColumna = celdas[1].columna - origen.columna
+  }
 
   if (
-    celdasSeleccionadas.value.some(
-      (celda) =>
-        celda.fila === fila &&
-        celda.columna === columna
-    )
+    diferenciaFila !== direccionFila * pasos ||
+    diferenciaColumna !== direccionColumna * pasos ||
+    pasos < celdas.length
   ) {
-
     return
-
   }
 
+  for (let paso = celdas.length; paso <= pasos; paso++) {
+    const filaActual = origen.fila + direccionFila * paso
+    const columnaActual = origen.columna + direccionColumna * paso
+    const letraActual = tablero.value[filaActual]?.[columnaActual]
 
-  palabraSeleccionada.value +=
-    letra
+    if (!letraActual) {
+      return
+    }
 
+    celdasSeleccionadas.value.push({
+      fila: filaActual,
+      columna: columnaActual
+    })
+    palabraSeleccionada.value += letraActual
+    validarSeleccionAutomatica()
 
-  celdasSeleccionadas.value.push({
-    fila,
-    columna
-  })
+    if (!seleccionEnCurso) {
+      return
+    }
+  }
+}
 
+const finalizarSeleccion = () => {
+  if (!seleccionEnCurso) {
+    return
+  }
+
+  seleccionEnCurso = false
+
+  if (celdasSeleccionadas.value.length < 2) {
+    limpiarSeleccion()
+    return
+  }
+
+  validarSeleccionAutomatica(true)
+}
+
+const cancelarSeleccion = () => {
+  if (!seleccionEnCurso) {
+    return
+  }
+
+  seleccionEnCurso = false
+  limpiarSeleccion()
 }
 
 
@@ -781,199 +723,91 @@ const seleccionEsValida = () => {
 
 
 // ==========================================
-// COMPROBAR PALABRA
+// VALIDAR SELECCIÓN AUTOMÁTICAMENTE
 // ==========================================
 
-const comprobarPalabra = () => {
+const limpiarSeleccion = () => {
+  palabraSeleccionada.value = ''
+  celdasSeleccionadas.value = []
+}
 
-  if (
-    juegoTerminado.value
-  ) {
+const registrarError = (texto) => {
+  seleccionEnCurso = false
+  errores.value++
+  puntuacion.value = Math.max(0, puntuacion.value - 25)
+  mensaje.value = texto
+  respuestaCorrecta.value = false
+  limpiarSeleccion()
+}
+
+const registrarAcierto = (palabra) => {
+  const yaEncontrada = palabrasEncontradas.value.some(
+    encontrada => encontrada.palabra === palabra
+  )
+
+  if (yaEncontrada) {
+    registrarError(`La palabra ${palabra} ya fue encontrada`)
+    return
+  }
+
+  palabrasEncontradas.value.push({
+    palabra,
+    celdas: [...celdasSeleccionadas.value]
+  })
+  seleccionEnCurso = false
+  aciertos.value++
+  puntuacion.value += 100
+  mensaje.value = `¡Correcto! Encontraste ${palabra}`
+  respuestaCorrecta.value = true
+  limpiarSeleccion()
+
+  if (palabrasEncontradas.value.length === palabras.value.length) {
+    finalizarJuego()
+  }
+}
+
+const validarSeleccionAutomatica = (finalizada = false) => {
+  const seleccion = palabraSeleccionada.value
+
+  if (!seleccion) {
+    return
+  }
+
+  if (!seleccionEsValida()) {
+    registrarError('Las letras deben estar en línea recta.')
+    return
+  }
+
+  const palabraEncontrada = palabras.value.find(palabra =>
+    palabra === seleccion || [...palabra].reverse().join('') === seleccion
+  )
+
+  if (palabraEncontrada) {
+    if (finalizada) {
+      registrarAcierto(palabraEncontrada)
+    }
 
     return
-
   }
 
-
-  const palabra =
-    palabraSeleccionada.value
-
-
-  // ========================================
-  // SIN SELECCIÓN
-  // ========================================
-
-  if (!palabra) {
-
-    mensaje.value =
-      'Selecciona una palabra primero.'
-
-
-    respuestaCorrecta.value =
-      false
-
-
-    return
-
-  }
-
-
-  // ========================================
-  // COMPROBAR LÍNEA
-  // ========================================
-
-  if (
-    !seleccionEsValida()
-  ) {
-
-    mensaje.value =
-      'Las letras deben estar en línea.'
-
-
-    respuestaCorrecta.value =
-      false
-
-
-    errores.value++
-
-
-    puntuacion.value =
-      Math.max(
-        0,
-        puntuacion.value - 25
-      )
-
-  }
-
-
-  // ========================================
-  // COMPROBAR PALABRA
-  // ========================================
-
-  else if (
-    palabras.value.includes(
-      palabra
+  const palabrasPendientes = palabras.value.filter(palabra =>
+    !palabrasEncontradas.value.some(
+      encontrada => encontrada.palabra === palabra
     )
-  ) {
+  )
+  const esPrefijoPosible = palabrasPendientes.some(palabra =>
+    palabra.startsWith(seleccion) ||
+    [...palabra].reverse().join('').startsWith(seleccion)
+  )
 
-    const palabraEncontrada =
-      palabra
-
-
-    const yaEncontrada =
-      palabrasEncontradas.value.some(
-        (encontrada) =>
-          encontrada.palabra ===
-          palabraEncontrada
-      )
-
-
-    if (!yaEncontrada) {
-
-      palabrasEncontradas.value.push({
-
-        palabra:
-          palabraEncontrada,
-
-        celdas: [
-          ...celdasSeleccionadas.value
-        ]
-
-      })
-
-
-      aciertos.value++
-
-
-      puntuacion.value +=
-        100
-
-
-      mensaje.value =
-        `¡Correcto! Encontraste ${palabraEncontrada}`
-
-
-      respuestaCorrecta.value =
-        true
-
-
-      // ==================================
-      // COMPROBAR FIN
-      // ==================================
-
-      if (
-        palabrasEncontradas.value.length ===
-        palabras.value.length
-      ) {
-
-        finalizarJuego()
-
-      }
-
-    }
-
-
-    else {
-
-      errores.value++
-
-
-      puntuacion.value =
-        Math.max(
-          0,
-          puntuacion.value - 25
-        )
-
-
-      mensaje.value =
-        `La palabra ${palabraEncontrada} ya fue encontrada`
-
-
-      respuestaCorrecta.value =
-        false
-
-    }
-
+  if (seleccion.length > 1 && !esPrefijoPosible) {
+    registrarError('Palabra incorrecta')
+    return
   }
 
-
-  // ========================================
-  // PALABRA INCORRECTA
-  // ========================================
-
-  else {
-
-    errores.value++
-
-
-    puntuacion.value =
-      Math.max(
-        0,
-        puntuacion.value - 25
-      )
-
-
-    mensaje.value =
-      'Palabra incorrecta'
-
-
-    respuestaCorrecta.value =
-      false
-
+  if (finalizada) {
+    registrarError('Palabra incorrecta')
   }
-
-
-  // ========================================
-  // LIMPIAR SELECCIÓN
-  // ========================================
-
-  palabraSeleccionada.value =
-    ''
-
-
-  celdasSeleccionadas.value =
-    []
-
 }
 
 
@@ -1111,7 +945,11 @@ onUnmounted(() => {
 
 <template>
 
-  <div class="game">
+  <div
+    class="game"
+    @pointerup.window="finalizarSeleccion"
+    @pointercancel.window="cancelarSeleccion"
+  >
 
     <BackToMenu />
 
@@ -1229,6 +1067,47 @@ onUnmounted(() => {
       </div>
 
 
+      <!-- Palabras por encontrar -->
+
+      <div
+        v-if="!juegoTerminado"
+        class="word-list-container"
+      >
+
+        <h2>
+          Palabras
+        </h2>
+
+        <ul class="word-list">
+
+          <li
+            v-for="palabra in palabras"
+            :key="palabra"
+          >
+
+            {{ palabra }}
+
+            <span
+              v-if="
+                palabrasEncontradas.some(
+                  encontrada =>
+                    encontrada.palabra ===
+                    palabra
+                )
+              "
+            >
+
+              ✓
+
+            </span>
+
+          </li>
+
+        </ul>
+
+      </div>
+
+
       <!-- Tablero -->
 
       <div class="board">
@@ -1266,13 +1145,22 @@ onUnmounted(() => {
 
             }"
 
-            @click="
-              seleccionarLetra(
+            @pointerdown.prevent="
+              iniciarSeleccion(
+                $event,
                 letra,
                 filaIndex,
                 columnaIndex
               )
             "
+            @pointerenter="
+              continuarSeleccion(
+                letra,
+                filaIndex,
+                columnaIndex
+              )
+            "
+            @dragstart.prevent
           >
 
             {{ letra }}
@@ -1282,23 +1170,6 @@ onUnmounted(() => {
         </template>
 
       </div>
-
-
-      <!-- Comprobar -->
-
-      <button
-        v-if="!juegoTerminado"
-
-        class="check-button"
-
-        @click="
-          comprobarPalabra
-        "
-      >
-
-        Comprobar palabra
-
-      </button>
 
 
       <!-- Mensaje -->
@@ -1370,45 +1241,6 @@ onUnmounted(() => {
 
       </div>
 
-
-      <!-- Lista de palabras -->
-
-      <div
-        v-if="!juegoTerminado"
-      >
-
-        <h2>
-          Palabras
-        </h2>
-
-        <ul>
-
-          <li
-            v-for="palabra in palabras"
-            :key="palabra"
-          >
-
-            {{ palabra }}
-
-            <span
-              v-if="
-                palabrasEncontradas.some(
-                  encontrada =>
-                    encontrada.palabra ===
-                    palabra
-                )
-              "
-            >
-
-              ✓
-
-            </span>
-
-          </li>
-
-        </ul>
-
-      </div>
 
     </template>
 
@@ -1539,6 +1371,65 @@ onUnmounted(() => {
 
 
 /* ==========================================
+   PALABRAS POR ENCONTRAR
+========================================== */
+
+.word-list-container h2 {
+
+  margin-bottom: 12px;
+
+}
+
+.word-list {
+
+  display: flex;
+
+  flex-wrap: wrap;
+
+  justify-content: center;
+
+  gap: 8px;
+
+  margin: 0 auto 18px;
+
+  padding: 0;
+
+  list-style: none;
+
+}
+
+.word-list li {
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+  padding: 7px 12px;
+
+  border: 1px solid rgba(79, 70, 229, 0.2);
+
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, 0.62);
+
+  color: #312e81;
+
+  font-weight: 600;
+
+}
+
+.word-list li span {
+
+  color: #16a34a;
+
+  font-weight: 800;
+
+}
+
+
+/* ==========================================
    TABLERO
 ========================================== */
 
@@ -1564,11 +1455,35 @@ onUnmounted(() => {
 
   height: 50px;
 
+  border: 1px solid rgba(79, 70, 229, 0.22);
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.58);
+
+  color: #312e81;
+
+  box-shadow: 0 2px 6px rgba(49, 46, 129, 0.08);
+
+  backdrop-filter: blur(6px);
+
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+
   font-size: 18px;
 
   font-weight: bold;
 
   cursor: pointer;
+
+  touch-action: none;
+
+  user-select: none;
+
+  -webkit-user-select: none;
 
 }
 
@@ -1579,9 +1494,15 @@ onUnmounted(() => {
 
 .board button.seleccionada {
 
-  background-color: #4caf50;
+  border-color: #4f46e5;
 
-  color: white;
+  background-color: rgba(99, 102, 241, 0.42);
+
+  color: #312e81;
+
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.22), 0 4px 10px rgba(49, 46, 129, 0.16);
+
+  transform: scale(1.04);
 
 }
 
@@ -1592,9 +1513,13 @@ onUnmounted(() => {
 
 .board button.encontrada {
 
-  background-color: #2196f3;
+  border-color: #16a34a;
+
+  background-color: #22c55e;
 
   color: white;
+
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.24);
 
 }
 

@@ -83,7 +83,7 @@ const volverLogin = () => {
   <div class="registro">
     <div class="registro-card">
 
-      <h1>🎮 Juegos Educativos</h1>
+  <h1>Juegos Educativos</h1>
 
       <h2>Crear cuenta</h2>
 
@@ -209,6 +209,19 @@ button:disabled {
 
 .volver {
   margin-top: 20px;
-  background: #6b7280;
+  border: 1px solid rgba(79, 70, 229, 0.24);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.48);
+  color: #3730a3;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(49, 46, 129, 0.08);
+  backdrop-filter: blur(10px);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.volver:hover {
+  transform: translateY(-1px);
+  border-color: rgba(79, 70, 229, 0.45);
+  background: rgba(255, 255, 255, 0.72);
 }
 </style>

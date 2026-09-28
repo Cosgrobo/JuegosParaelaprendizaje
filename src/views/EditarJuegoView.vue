@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import HomeButton from '../components/HomeButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,6 +140,7 @@ onMounted(() => {
 <template>
 
   <div class="editar">
+    <HomeButton />
 
     <div class="editar-card">
 
@@ -283,6 +285,7 @@ onMounted(() => {
 
 .editar {
   min-height: 100vh;
+  position: relative;
 
   display: flex;
   justify-content: center;
@@ -291,6 +294,12 @@ onMounted(() => {
   padding: 30px;
 
   background: linear-gradient(145deg, #f4f6ff, #ecfeff);
+}
+
+.editar > :deep(.home-button) {
+  position: absolute;
+  top: 24px;
+  left: 24px;
 }
 
 .editar-card {

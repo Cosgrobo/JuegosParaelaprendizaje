@@ -3,6 +3,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
+import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
 
 const route = useRoute()
 
@@ -254,7 +255,7 @@ FINALIZAR JUEGO
 ========================================
 */
 
-const finalizarJuego = () => {
+const finalizarJuego = async () => {
 
   if (juegoTerminado.value) {
     return
@@ -267,6 +268,16 @@ const finalizarJuego = () => {
   clearInterval(temporizador)
 
   temporizador = null
+
+  await guardarResultadoPartida({
+    idJuego: Number(route.params.id || palabras.value[0]?.id_juego || 2),
+    horaInicio: horaInicio.value,
+    horaFin: horaFin.value,
+    tiempoTranscurrido: tiempoTranscurrido.value,
+    aciertos: aciertos.value,
+    errores: errores.value,
+    puntuacion: puntuacion.value
+  })
 }
 
 /*
@@ -571,6 +582,11 @@ const escribirLetra = (
   */
 
   if (valor) {
+    comprobarPalabrasCompletasEnCelda(
+      fila,
+      columna
+    )
+
     avanzarCasilla(
       fila,
       columna
@@ -979,6 +995,32 @@ const comprobarPalabra = (
   }
 }
 
+const comprobarPalabrasCompletasEnCelda = (
+  fila,
+  columna
+) => {
+  const celda = tablero.value[fila][columna]
+
+  celda.palabras.forEach(nombrePalabra => {
+    const palabra = palabras.value.find(
+      item => item.palabra === nombrePalabra
+    )
+
+    if (!palabra || palabraCompletada(palabra)) {
+      return
+    }
+
+    const celdas = obtenerCeldasPalabra(palabra)
+    const estaCompleta = celdas.every(celdaPalabra =>
+      obtenerLetra(celdaPalabra.fila, celdaPalabra.columna) !== ''
+    )
+
+    if (estaCompleta) {
+      comprobarPalabra(palabra)
+    }
+  })
+}
+
 /*
 ========================================
 PROGRESO
@@ -1373,31 +1415,6 @@ onUnmounted(() => {
         </div>
 
 
-        <button
-          :disabled="
-            palabraCompletada(
-              palabra
-            ) ||
-            juegoTerminado
-          "
-
-          @click.stop="
-            comprobarPalabra(
-              palabra
-            )
-          "
-        >
-
-          {{
-            palabraCompletada(
-              palabra
-            )
-              ? 'Completada ✓'
-              : 'Comprobar'
-          }}
-
-        </button>
-
       </div>
 
     </section>
@@ -1610,9 +1627,13 @@ onUnmounted(() => {
 
   height: 40px;
 
-  background: white;
+  overflow: hidden;
 
-  border: 1px solid #333;
+  background: rgba(255, 255, 255, 0.64);
+
+  border: 1px solid rgba(79, 70, 229, 0.22);
+
+  border-radius: 8px;
 
   box-sizing: border-box;
 
@@ -1621,30 +1642,46 @@ onUnmounted(() => {
 
 .cell.bloqueada {
 
-  background: #222;
+  background: rgba(226, 232, 240, 0.78);
 
-  border-color: #222;
+  border-color: rgba(148, 163, 184, 0.42);
+
+}
+
+.cell:not(.bloqueada) {
+
+  border-color: rgba(71, 85, 105, 0.66);
 
 }
 
 
 .cell.activa {
 
-  background: #e8f4ff;
+  background: rgba(186, 230, 253, 0.62);
+
+  border: 2px solid #0284c7;
 
 }
 
 
 .cell.celda-seleccionada {
 
-  background: #90caf9;
+  z-index: 1;
+
+  background: rgba(191, 219, 254, 0.88);
+
+  border: 2px solid #4338ca;
+
+  box-shadow: 0 0 0 2px rgba(67, 56, 202, 0.2), 0 4px 12px rgba(49, 46, 129, 0.14);
 
 }
 
 
 .cell.completada {
 
-  background: #c8e6c9;
+  background: rgba(34, 197, 94, 0.22);
+
+  border-color: rgba(22, 163, 74, 0.48);
 
 }
 
@@ -1707,7 +1744,9 @@ onUnmounted(() => {
 
 .cell input:focus {
 
-  background: #90caf9;
+  background: rgba(191, 219, 254, 0.88);
+
+  box-shadow: inset 0 0 0 2px rgba(67, 56, 202, 0.2);
 
 }
 

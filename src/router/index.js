@@ -73,24 +73,24 @@ const router = createRouter({
     },
 
     {
-      path: '/juegos/ruleta',
+      path: '/juegos/ruleta/:id',
       name: 'ruleta',
       component: RouletteView
     },
 
     {
-      path: '/juegos/memorama',
+      path: '/juegos/memorama/:id?',
       name: 'memorama',
       component: MemoryView
     },
 
     {
-      path: '/juegos/preguntas',
+      path: '/juegos/preguntas/:id?',
       name: 'preguntas',
       component: QuizView
     },
     {
-  path: '/juegos/detective',
+  path: '/juegos/detective/:id?',
   name: 'DetectiveView',
   component: DetectiveView
     }

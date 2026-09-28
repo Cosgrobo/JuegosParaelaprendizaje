@@ -10,6 +10,7 @@ const iconosPorTipo = {
   Crucigrama: '\u{1F9E9}',
   Ruleta: '\u{1F3A1}',
   Memorama: '\u{1F9E0}',
+  Quiz: '\u{2753}',
   Preguntas: '\u{2753}',
   Detective: '\u{1F575}\u{FE0F}'
 }
@@ -18,7 +19,7 @@ const obtenerIcono = (tipo) => iconosPorTipo[tipo] || '\u{1F3AE}'
 const definicionCategorias = [
   { id: 'palabras', titulo: 'Palabras y letras', tipos: ['Sopa de letras', 'Crucigrama'] },
   { id: 'observacion', titulo: 'Memoria y observación', tipos: ['Memorama', 'Detective'] },
-  { id: 'retos', titulo: 'Preguntas y azar', tipos: ['Preguntas', 'Ruleta'] }
+  { id: 'retos', titulo: 'Preguntas y azar', tipos: ['Quiz', 'Preguntas', 'Ruleta'] }
 ]
 const carruseles = ref({})
 
@@ -142,13 +143,13 @@ onMounted(() => {
                   : juego.tipo === 'Crucigrama'
                     ? `/juegos/crucigrama/${juego.id_juego}`
                     : juego.tipo === 'Ruleta'
-                      ? '/juegos/ruleta'
+                      ? `/juegos/ruleta/${juego.id_juego}`
                       : juego.tipo === 'Memorama'
-                        ? '/juegos/memorama'
-                        : juego.tipo === 'Preguntas'
-                          ? '/juegos/preguntas'
+                        ? `/juegos/memorama/${juego.id_juego}`
+                        : ['Quiz', 'Preguntas'].includes(juego.tipo)
+                          ? `/juegos/preguntas/${juego.id_juego}`
                           : juego.tipo === 'Detective'
-                            ? '/juegos/detective'
+                            ? `/juegos/detective/${juego.id_juego}`
                             : '#'
               "
             />

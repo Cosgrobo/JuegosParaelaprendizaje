@@ -9,7 +9,7 @@ const props = defineProps({
 
 const desactivarJuego = async () => {
   const confirmar = confirm(
-    `¿Seguro que quieres desactivar el juego "${props.title}"?`
+    `¿Seguro que quieres eliminar el juego "${props.title}"?`
   )
 
   if (!confirmar) {

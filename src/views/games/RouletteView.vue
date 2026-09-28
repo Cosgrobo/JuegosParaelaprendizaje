@@ -1,9 +1,12 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
+import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
 
 const router = useRouter()
+const route = useRoute()
+const idJuego = computed(() => Number(route.params.id))
 
 // ==========================================
 // ESTADO DEL JUEGO
@@ -29,6 +32,9 @@ const puntuacion = ref(0)
 const respondidas = ref(0)
 
 const segundos = ref(0)
+const horaInicio = ref(null)
+const juegoTerminado = ref(false)
+const resultadoGuardado = ref(false)
 let temporizador = null
 
 // ==========================================
@@ -56,7 +62,7 @@ const obtenerPreguntas = async () => {
     errorCarga.value = ''
 
     const respuesta = await fetch(
-      'http://localhost:3000/api/juegos/5/preguntas'
+      `http://localhost:3000/api/juegos/${idJuego.value}/preguntas`
     )
 
     if (!respuesta.ok) {
@@ -195,6 +201,7 @@ const estiloEtiqueta = (index) => {
 const girarRuleta = () => {
   if (
     girando.value ||
+    juegoTerminado.value ||
     preguntas.value.length === 0
   ) {
     return
@@ -295,6 +302,28 @@ const comprobarRespuesta = () => {
     mensaje.value =
       `❌ Respuesta incorrecta. La respuesta correcta era: ${correcta}`
   }
+
+  if (respondidas.value >= preguntas.value.length) {
+    juegoTerminado.value = true
+    clearInterval(temporizador)
+    temporizador = null
+
+    if (!resultadoGuardado.value) {
+      const horaFin = new Date()
+      const inicio = horaInicio.value || horaFin
+
+      resultadoGuardado.value = true
+      void guardarResultadoPartida({
+        idJuego: idJuego.value,
+        horaInicio: inicio,
+        horaFin,
+        tiempoTranscurrido: segundos.value,
+        aciertos: aciertos.value,
+        errores: errores.value,
+        puntuacion: puntuacion.value
+      })
+    }
+  }
 }
 
 // ==========================================
@@ -335,12 +364,19 @@ const claseOpcion = (indice) => {
 // ==========================================
 
 const reiniciarJuego = () => {
+  if (temporizador) {
+    clearInterval(temporizador)
+  }
+
   aciertos.value = 0
   errores.value = 0
   puntuacion.value = 0
   respondidas.value = 0
 
   segundos.value = 0
+  horaInicio.value = new Date()
+  juegoTerminado.value = false
+  resultadoGuardado.value = false
 
   preguntaSeleccionada.value = null
   indicePreguntaSeleccionada.value = null
@@ -350,6 +386,10 @@ const reiniciarJuego = () => {
   mensaje.value = ''
 
   rotacion.value = 0
+
+  temporizador = setInterval(() => {
+    segundos.value++
+  }, 1000)
 }
 
 // ==========================================
@@ -359,6 +399,7 @@ const reiniciarJuego = () => {
 onMounted(async () => {
   await obtenerPreguntas()
 
+  horaInicio.value = new Date()
   temporizador = setInterval(() => {
     segundos.value++
   }, 1000)
@@ -484,10 +525,10 @@ onUnmounted(() => {
 
         <button
           class="boton-girar"
-          :disabled="girando"
+          :disabled="girando || juegoTerminado"
           @click="girarRuleta"
         >
-          {{ girando ? 'Girando...' : '🎡 Girar ruleta' }}
+          {{ girando ? 'Girando...' : juegoTerminado ? 'Partida terminada' : '🎡 Girar ruleta' }}
         </button>
 
       </section>
