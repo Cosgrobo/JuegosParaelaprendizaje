@@ -290,7 +290,7 @@ onMounted(() => {
 
   padding: 30px;
 
-  background: #f4f6f8;
+  background: linear-gradient(145deg, #f4f6ff, #ecfeff);
 }
 
 .editar-card {
@@ -301,7 +301,7 @@ onMounted(() => {
 
   background: white;
 
-  border-radius: 16px;
+  border-radius: 26px;
 
   box-shadow:
     0 5px 20px rgba(0, 0, 0, 0.08);
@@ -364,7 +364,7 @@ textarea {
 
 input:focus,
 textarea:focus {
-  border-color: #2563eb;
+  border-color: #4f46e5;
 
   box-shadow:
     0 0 0 3px rgba(37, 99, 235, 0.1);
@@ -411,13 +411,13 @@ textarea:focus {
 }
 
 .guardar {
-  background: #2563eb;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
 
   color: white;
 }
 
 .guardar:hover {
-  background: #1d4ed8;
+  background: linear-gradient(135deg, #3730a3, #4f46e5);
 }
 
 .guardar:disabled {

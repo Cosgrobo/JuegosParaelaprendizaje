@@ -458,7 +458,7 @@ function cerrarSesion() {
 <style scoped>
 .profile-page {
   min-height: 100vh;
-  background: #f4f6f8;
+  background: linear-gradient(145deg, #f4f6ff 0%, #f8faff 52%, #ecfeff 100%);
   color: #1e293b;
 }
 
@@ -468,15 +468,15 @@ function cerrarSesion() {
   align-items: center;
   justify-content: space-between;
   padding: 0 40px;
-  background: white;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+  background: linear-gradient(105deg, #312e81, #4f46e5);
+  box-shadow: 0 8px 24px rgba(49, 46, 129, 0.18);
 }
 
 .back-button {
   padding: 9px 0;
   border: 0;
   background: transparent;
-  color: #2563eb;
+  color: #fff;
   font: inherit;
   cursor: pointer;
 }
@@ -488,7 +488,7 @@ function cerrarSesion() {
 }
 
 .navbar-title {
-  color: #1e3a5f;
+  color: #fff;
   font-weight: 700;
 }
 
@@ -503,9 +503,9 @@ function cerrarSesion() {
   box-sizing: border-box;
   padding: 36px;
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
+  border-radius: 26px;
   background: white;
-  box-shadow: 0 12px 30px rgba(30, 58, 95, 0.08);
+  box-shadow: 0 18px 38px rgba(49, 46, 129, 0.12);
 }
 
 .profile-heading {
@@ -526,9 +526,9 @@ function cerrarSesion() {
   flex: 0 0 76px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  background: #dbeafe;
-  color: #1d4ed8;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #c7d2fe, #a5f3fc);
+  color: #3730a3;
   font-size: 25px;
   font-weight: 700;
   overflow: hidden;
@@ -581,7 +581,7 @@ function cerrarSesion() {
 
 h1 {
   margin: 0;
-  color: #1e3a5f;
+  color: #312e81;
   font-size: 26px;
 }
 
@@ -734,17 +734,17 @@ h2 {
   display: block;
   margin: 28px auto 0;
   padding: 11px 17px;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
+  border: 1px solid #fed7aa;
+  border-radius: 13px;
   background: #fff;
-  color: #b91c1c;
+  color: #c2410c;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
 }
 
 .logout-button:hover {
-  background: #fef2f2;
+  background: #fff7ed;
 }
 
 @media (max-width: 600px) {

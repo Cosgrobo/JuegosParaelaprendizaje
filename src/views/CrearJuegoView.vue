@@ -472,7 +472,7 @@ onMounted(() => {
 
 .crear-juego {
   min-height: 100vh;
-  background: #f5f7fb;
+  background: linear-gradient(145deg, #f4f6ff, #ecfeff);
   padding: 40px 20px;
 }
 
@@ -481,7 +481,7 @@ onMounted(() => {
   margin: 0 auto;
   background: white;
   padding: 35px;
-  border-radius: 15px;
+  border-radius: 26px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
@@ -622,7 +622,7 @@ h1 {
 }
 
 .btn-crear {
-  background: #2563eb;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
   color: white;
 }
 

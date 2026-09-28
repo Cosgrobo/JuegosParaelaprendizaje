@@ -149,14 +149,14 @@ const volverLogin = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #f4f6f8;
+  background: linear-gradient(145deg, #eef2ff, #ecfeff);
 }
 
 .registro-card {
   width: 350px;
   padding: 30px;
   background: white;
-  border-radius: 15px;
+  border-radius: 28px;
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
   text-align: center;
 }
@@ -178,15 +178,15 @@ form {
 input {
   padding: 12px;
   border: 1px solid #ccc;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 16px;
 }
 
 button {
   padding: 12px;
   border: none;
-  border-radius: 8px;
-  background: #2563eb;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
   color: white;
   font-size: 16px;
   cursor: pointer;
