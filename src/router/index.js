@@ -12,6 +12,7 @@ import QuizView from '../views/games/QuizView.vue'
 import DetectiveView from '../views/games/DetectiveView.vue'
 import EditarJuegoView from '../views/EditarJuegoView.vue'
 import CrearJuegoView from '../views/CrearJuegoView.vue'
+import ProfileView from '../views/ProfileView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -43,6 +44,12 @@ const router = createRouter({
     },
 
     {
+      path: '/perfil',
+      name: 'perfil',
+      component: ProfileView
+    },
+
+    {
     path: '/juegos/crear',
     name: 'crear-juego',
     component: CrearJuegoView
@@ -54,6 +61,11 @@ const router = createRouter({
     component: WordSearchView
     },
 
+    {
+      path: '/juegos/crucigrama/:id',
+      name: 'crucigrama-personalizado',
+      component: CrosswordView
+    },
     {
       path: '/juegos/crucigrama',
       name: 'crucigrama',

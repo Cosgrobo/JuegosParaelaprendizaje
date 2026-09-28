@@ -1,6 +1,7 @@
 ```vue
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import BackToMenu from '../../components/BackToMenu.vue'
 
 /*
 ========================================
@@ -618,6 +619,8 @@ onUnmounted(() => {
 <template>
 
   <div class="game">
+
+    <BackToMenu />
 
     <!-- ================================= -->
     <!-- ENCABEZADO -->

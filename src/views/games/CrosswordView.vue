@@ -1,6 +1,10 @@
 ```vue
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import BackToMenu from '../../components/BackToMenu.vue'
+
+const route = useRoute()
 
 /*
 ========================================
@@ -446,8 +450,7 @@ const seleccionarPalabra = (palabra) => {
 
   palabraActiva.value = palabra
 
-  mensaje.value =
-    `Resolviendo: ${palabra.palabra}`
+  mensaje.value = ''
 
   respuestaCorrecta.value = false
 
@@ -1031,7 +1034,25 @@ INICIO
 ========================================
 */
 
-onMounted(() => {
+onMounted(async () => {
+  if (route.params.id) {
+    try {
+      const respuesta = await fetch(`http://localhost:3000/api/juegos/${route.params.id}/crucigrama`)
+      const datos = await respuesta.json()
+      if (!respuesta.ok) throw new Error(datos.mensaje || 'No se pudo cargar el crucigrama')
+      if (!datos.length) throw new Error('Este crucigrama todavía no tiene palabras')
+      palabras.value = datos.map((item) => ({
+        ...item,
+        palabra: item.palabra.toUpperCase(),
+        fila: Number(item.fila),
+        columna: Number(item.columna)
+      }))
+      tablero.value = generarTablero()
+    } catch (error) {
+      console.error('Error al cargar el crucigrama:', error)
+      mensaje.value = error.message || 'No se pudo cargar el crucigrama'
+    }
+  }
   iniciarJuego()
 })
 
@@ -1053,6 +1074,8 @@ onUnmounted(() => {
 <template>
 
   <div class="game">
+
+    <BackToMenu />
 
     <header class="game-header">
 
@@ -1125,24 +1148,6 @@ onUnmounted(() => {
         </span>
 
       </div>
-
-    </div>
-
-
-    <!-- ================================= -->
-    <!-- PALABRA ACTIVA -->
-    <!-- ================================= -->
-
-    <div
-      v-if="palabraActiva"
-      class="active-word"
-    >
-
-      Palabra seleccionada:
-
-      <strong>
-        {{ palabraActiva.palabra }}
-      </strong>
 
     </div>
 
@@ -1563,27 +1568,6 @@ onUnmounted(() => {
   font-size: 21px;
 
   font-weight: bold;
-
-}
-
-
-/* ========================================
-   PALABRA ACTIVA
-======================================== */
-
-.active-word {
-
-  display: inline-block;
-
-  margin: 15px auto;
-
-  padding: 10px 18px;
-
-  border-radius: 8px;
-
-  background: #e3f2fd;
-
-  border: 1px solid #90caf9;
 
 }
 
