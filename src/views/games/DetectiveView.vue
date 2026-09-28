@@ -482,18 +482,13 @@ const resetCaseState = () => {
 // ========================================
 
 const obtenerEnigmas = async () => {
-
   try {
-
     cargando.value = true
     errorCarga.value = ''
 
-    // El ID viene desde la URL
-    const idJuego = route.params.id
+    console.log('ID DEL JUEGO:', idJuego.value)
 
-    console.log('ID DEL JUEGO:', idJuego)
-
-    if (!idJuego) {
+    if (!idJuego.value) {
       throw new Error(
         'No se recibió el ID del juego Detective'
       )
@@ -501,11 +496,9 @@ const obtenerEnigmas = async () => {
 
     const respuesta = await fetch(
       `http://localhost:3000/api/juegos/${idJuego.value}/enigmas`
-      `http://localhost:3000/api/juegos/${idJuego}/enigmas`
     )
 
     if (!respuesta.ok) {
-
       const datosError =
         await respuesta.json().catch(() => ({}))
 
@@ -522,24 +515,16 @@ const obtenerEnigmas = async () => {
       datos
     )
 
-    // Convertir datos de MySQL al formato
-    // que utiliza DetectiveView
     enigmas.value = datos.map(enigma => ({
-
       id: enigma.id_enigma,
-
       subject: enigma.materia,
-
       title: enigma.titulo,
-
       answer: enigma.respuesta,
-
       clues: [
         enigma.pista_1,
         enigma.pista_2,
         enigma.pista_3
       ]
-
     }))
 
     selectedSubjectFilter.value = 'ALL'
@@ -548,7 +533,6 @@ const obtenerEnigmas = async () => {
     resetCaseState()
 
   } catch (error) {
-
     console.error(
       'ERROR AL CARGAR ENIGMAS:',
       error
@@ -559,9 +543,7 @@ const obtenerEnigmas = async () => {
       'No se pudieron cargar los enigmas.'
 
   } finally {
-
     cargando.value = false
-
   }
 }
 
