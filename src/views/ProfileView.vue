@@ -12,6 +12,46 @@ const errorFoto = ref('')
 const resultados = ref([])
 const cargandoResultados = ref(false)
 const errorResultados = ref('')
+const unidadSeleccionada = ref('todas')
+
+const resultadosPorUnidad = computed(() => {
+  const grupos = new Map()
+
+  for (const resultado of resultados.value) {
+    const clave = resultado.id_unidad == null
+      ? 'sin-unidad'
+      : String(resultado.id_unidad)
+
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        id_unidad: resultado.id_unidad,
+        nombre: resultado.unidad || 'Sin unidad asignada',
+        resultados: [],
+        totalPuntos: 0
+      })
+    }
+
+    const grupo = grupos.get(clave)
+    grupo.resultados.push(resultado)
+    grupo.totalPuntos += Number(resultado.puntuacion) || 0
+  }
+
+  return [...grupos.values()].sort((a, b) => {
+    if (a.id_unidad == null) return 1
+    if (b.id_unidad == null) return -1
+    return Number(a.id_unidad) - Number(b.id_unidad)
+  })
+})
+
+const gruposVisibles = computed(() => {
+  if (unidadSeleccionada.value === 'todas') {
+    return resultadosPorUnidad.value
+  }
+
+  return resultadosPorUnidad.value.filter((grupo) =>
+    String(grupo.id_unidad ?? 'sin-unidad') === unidadSeleccionada.value
+  )
+})
 
 const iniciales = computed(() => {
   const nombre = usuario.value?.nombre || usuario.value?.usuario || 'U'
@@ -325,6 +365,23 @@ function cerrarSesion() {
             Historial de partidas
           </h2>
 
+          <label
+            v-if="!cargandoResultados && !errorResultados && resultados.length > 0"
+            class="unit-filter"
+          >
+            <span>Clasificar por unidad</span>
+            <select v-model="unidadSeleccionada">
+              <option value="todas">Todas las unidades</option>
+              <option
+                v-for="grupo in resultadosPorUnidad"
+                :key="grupo.id_unidad ?? 'sin-unidad'"
+                :value="String(grupo.id_unidad ?? 'sin-unidad')"
+              >
+                {{ grupo.nombre }}
+              </option>
+            </select>
+          </label>
+
           <!-- CARGANDO -->
 
           <p
@@ -356,11 +413,30 @@ function cerrarSesion() {
 
           <div
             v-else
-            class="results-list"
+            class="unit-results-list"
           >
 
+            <section
+              v-for="grupo in gruposVisibles"
+              :key="grupo.id_unidad ?? 'sin-unidad'"
+              class="unit-results-group"
+            >
+
+              <header class="unit-results-header">
+                <div>
+                  <h3>{{ grupo.nombre }}</h3>
+                  <span>{{ grupo.resultados.length }} partidas</span>
+                </div>
+                <div class="unit-total-score">
+                  <span>Total de la unidad</span>
+                  <strong>{{ grupo.totalPuntos }} <small>pts</small></strong>
+                </div>
+              </header>
+
+              <div class="results-list">
+
             <article
-              v-for="resultado in resultados"
+              v-for="resultado in grupo.resultados"
               :key="resultado.id_resultado"
               class="result-card"
             >
@@ -375,6 +451,9 @@ function cerrarSesion() {
 
                   <span class="game-type">
                     {{ resultado.tipo }}
+                  </span>
+                  <span class="unit-badge">
+                    {{ resultado.unidad || 'Sin unidad asignada' }}
                   </span>
 
                 </div>
@@ -439,6 +518,9 @@ function cerrarSesion() {
               </div>
 
             </article>
+
+              </div>
+            </section>
 
           </div>
 
@@ -625,6 +707,27 @@ h2 {
   margin-top: 4px;
 }
 
+.unit-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 18px;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.unit-filter select {
+  min-width: min(260px, 55%);
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #1e293b;
+  font: inherit;
+}
+
 .history-message {
   margin: 0;
   padding: 20px;
@@ -649,11 +752,62 @@ h2 {
   gap: 14px;
 }
 
+.unit-results-list {
+  display: grid;
+  gap: 20px;
+}
+
+.unit-results-group {
+  padding: 18px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #f8fafc, #eef2ff);
+}
+
+.unit-results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 15px;
+}
+
+.unit-results-header h3 {
+  margin: 0;
+  color: #312e81;
+  font-size: 19px;
+}
+
+.unit-results-header > div:first-child > span,
+.unit-total-score > span {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.unit-total-score {
+  text-align: right;
+}
+
+.unit-total-score strong {
+  color: #2563eb;
+  font-size: 22px;
+}
+
+.unit-total-score small {
+  font-size: 12px;
+}
+
 .result-card {
   padding: 18px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   background: #f8fafc;
+}
+
+.unit-results-group .result-card {
+  background: #fff;
 }
 
 .result-header {
@@ -674,6 +828,20 @@ h2 {
   margin-top: 5px;
   color: #64748b;
   font-size: 12px;
+}
+
+.unit-badge {
+  display: inline-flex;
+  align-items: center;
+  margin: 5px 0 0 8px;
+  padding: 4px 9px;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
 }
 
 .score {
@@ -771,6 +939,31 @@ h2 {
 
   .result-details {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .unit-filter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .unit-filter select {
+    width: 100%;
+  }
+
+  .unit-results-group {
+    padding: 14px;
+  }
+
+  .unit-results-header {
+    align-items: flex-start;
+  }
+
+  .unit-results-header h3 {
+    font-size: 16px;
+  }
+
+  .unit-total-score strong {
+    font-size: 18px;
   }
 }
 </style>

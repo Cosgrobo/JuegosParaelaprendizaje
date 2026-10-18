@@ -1,4 +1,3 @@
-
 const express = require('express')
 const cors = require('cors')
 const conexion = require('./db')
@@ -41,10 +40,14 @@ app.get('/api/juegos', async (req, res) => {
         j.descripcion,
         j.instrucciones,
         j.activo,
+        j.id_unidad,
+        u.nombre AS unidad,
         t.nombre AS tipo
       FROM juegos j
       INNER JOIN tipos_juego t
         ON j.id_tipo = t.id_tipo
+      LEFT JOIN unidades u
+        ON j.id_unidad = u.id_unidad
       WHERE j.activo = TRUE
       ORDER BY j.id_juego
     `)
@@ -81,10 +84,14 @@ app.get('/api/juegos/:id', async (req, res) => {
         j.instrucciones,
         j.activo,
         j.id_tipo,
+        j.id_unidad,
+        u.nombre AS unidad,
         t.nombre AS tipo
       FROM juegos j
       INNER JOIN tipos_juego t
         ON j.id_tipo = t.id_tipo
+      LEFT JOIN unidades u
+        ON j.id_unidad = u.id_unidad
       WHERE j.id_juego = ?
       `,
       [id]
@@ -136,6 +143,60 @@ app.get('/api/tipos-juego', async (req, res) => {
     res.status(500).json({
       mensaje: 'Error al obtener los tipos de juego'
     })
+  }
+})
+
+
+// ========================================
+// UNIDADES
+// ========================================
+
+app.get('/api/unidades', async (req, res) => {
+  try {
+    const [unidades] = await conexion.query(`
+      SELECT id_unidad, nombre
+      FROM unidades
+      ORDER BY id_unidad
+    `)
+
+    res.json(unidades)
+  } catch (error) {
+    console.error('Error al obtener unidades:', error.message)
+    res.status(500).json({ mensaje: 'No se pudieron obtener las unidades' })
+  }
+})
+
+app.post('/api/unidades', async (req, res) => {
+  try {
+    const nombre = String(req.body.nombre || '').trim()
+
+    if (!nombre || nombre.length > 100) {
+      return res.status(400).json({
+        mensaje: 'Escribe un nombre de unidad de hasta 100 caracteres'
+      })
+    }
+
+    const [existentes] = await conexion.query(
+      'SELECT id_unidad FROM unidades WHERE nombre = ?',
+      [nombre]
+    )
+
+    if (existentes.length > 0) {
+      return res.status(409).json({ mensaje: 'Ya existe una unidad con ese nombre' })
+    }
+
+    const [resultado] = await conexion.query(
+      'INSERT INTO unidades (nombre) VALUES (?)',
+      [nombre]
+    )
+
+    res.status(201).json({
+      mensaje: 'Unidad creada correctamente',
+      unidad: { id_unidad: resultado.insertId, nombre }
+    })
+  } catch (error) {
+    console.error('Error al crear unidad:', error.message)
+    res.status(500).json({ mensaje: 'No se pudo crear la unidad' })
   }
 })
 
@@ -247,128 +308,327 @@ app.post('/api/juegos/:id/palabras-sopa', async (req, res) => {
 })
 
 
-// Obtener palabras y posiciones de un crucigrama
+// ========================================
+// OBTENER PALABRAS Y POSICIONES DE CRUCIGRAMA
+// ========================================
+
 app.get('/api/juegos/:id/crucigrama', async (req, res) => {
   try {
     const [palabras] = await conexion.query(`
-      SELECT id_palabra, palabra, pista, fila, columna, direccion
+      SELECT
+        id_palabra,
+        palabra,
+        pista,
+        fila,
+        columna,
+        direccion
       FROM palabras_crucigrama
       WHERE id_juego = ?
       ORDER BY id_palabra
     `, [req.params.id])
 
     res.json(palabras)
+
   } catch (error) {
-    console.error('Error al obtener el crucigrama:', error.message)
-    res.status(500).json({ mensaje: 'Error al obtener el crucigrama' })
+    console.error(
+      'Error al obtener el crucigrama:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al obtener el crucigrama'
+    })
   }
 })
 
-// Reemplazar las palabras de una sopa de letras
+
+// ========================================
+// REEMPLAZAR LAS PALABRAS DE UNA SOPA
+// ========================================
+
 app.put('/api/juegos/:id/palabras-sopa', async (req, res) => {
   const { id } = req.params
   const palabras = req.body.palabras
+
   if (!Array.isArray(palabras) || palabras.length === 0) {
-    return res.status(400).json({ mensaje: 'Agrega al menos una palabra a la sopa' })
+    return res.status(400).json({
+      mensaje: 'Agrega al menos una palabra a la sopa'
+    })
   }
 
   const normalizadas = palabras.map((item) => ({
-    palabra: String(item.palabra || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z]/g, ''),
+    palabra: String(item.palabra || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z]/g, ''),
+
     pista: String(item.pista || '').trim() || null
   }))
-  if (normalizadas.some((item) => !item.palabra || item.palabra.length > 10)) {
-    return res.status(400).json({ mensaje: 'Cada palabra debe tener entre 1 y 10 letras' })
+
+  if (
+    normalizadas.some(
+      (item) => !item.palabra || item.palabra.length > 10
+    )
+  ) {
+    return res.status(400).json({
+      mensaje: 'Cada palabra debe tener entre 1 y 10 letras'
+    })
   }
 
   let conexionBD
+
   try {
-    const [juegos] = await conexion.query('SELECT id_juego FROM juegos WHERE id_juego = ?', [id])
-    if (!juegos.length) return res.status(404).json({ mensaje: 'El juego no existe' })
+    const [juegos] = await conexion.query(
+      'SELECT id_juego FROM juegos WHERE id_juego = ?',
+      [id]
+    )
+
+    if (!juegos.length) {
+      return res.status(404).json({
+        mensaje: 'El juego no existe'
+      })
+    }
 
     conexionBD = await conexion.getConnection()
+
     await conexionBD.beginTransaction()
-    await conexionBD.query('DELETE FROM palabras_sopa WHERE id_juego = ?', [id])
+
+    await conexionBD.query(
+      'DELETE FROM palabras_sopa WHERE id_juego = ?',
+      [id]
+    )
+
     for (const item of normalizadas) {
       await conexionBD.query(
-        'INSERT INTO palabras_sopa (id_juego, palabra, pista) VALUES (?, ?, ?)',
-        [id, item.palabra, item.pista]
+        `
+        INSERT INTO palabras_sopa
+        (
+          id_juego,
+          palabra,
+          pista
+        )
+        VALUES (?, ?, ?)
+        `,
+        [
+          id,
+          item.palabra,
+          item.pista
+        ]
       )
     }
+
     await conexionBD.commit()
-    res.json({ mensaje: 'Palabras de la sopa guardadas correctamente' })
+
+    res.json({
+      mensaje: 'Palabras de la sopa guardadas correctamente'
+    })
+
   } catch (error) {
-    if (conexionBD) await conexionBD.rollback()
-    console.error('Error al guardar las palabras de la sopa:', error.message)
-    res.status(500).json({ mensaje: 'Error al guardar las palabras de la sopa' })
+
+    if (conexionBD) {
+      await conexionBD.rollback()
+    }
+
+    console.error(
+      'Error al guardar las palabras de la sopa:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al guardar las palabras de la sopa'
+    })
+
   } finally {
-    if (conexionBD) conexionBD.release()
+
+    if (conexionBD) {
+      conexionBD.release()
+    }
   }
 })
 
-// Reemplazar de forma atómica el contenido de un crucigrama
+
+// ========================================
+// REEMPLAZAR EL CONTENIDO DE UN CRUCIGRAMA
+// ========================================
+
 app.put('/api/juegos/:id/crucigrama', async (req, res) => {
   const { id } = req.params
   const palabras = req.body.palabras
+
   if (!Array.isArray(palabras) || palabras.length === 0) {
-    return res.status(400).json({ mensaje: 'Agrega al menos una palabra al crucigrama' })
+    return res.status(400).json({
+      mensaje: 'Agrega al menos una palabra al crucigrama'
+    })
   }
 
   const normalizadas = palabras.map((item) => ({
-    palabra: String(item.palabra || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z]/g, ''),
+    palabra: String(item.palabra || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z]/g, ''),
+
     pista: String(item.pista || '').trim(),
+
     fila: Number(item.fila),
+
     columna: Number(item.columna),
+
     direccion: item.direccion
   }))
+
   const invalida = normalizadas.some((item) =>
-    !item.palabra || !item.pista || !Number.isInteger(item.fila) ||
-    !Number.isInteger(item.columna) || item.fila < 0 || item.fila > 9 ||
-    item.columna < 0 || item.columna > 14 ||
+    !item.palabra ||
+    !item.pista ||
+    !Number.isInteger(item.fila) ||
+    !Number.isInteger(item.columna) ||
+    item.fila < 0 ||
+    item.fila > 9 ||
+    item.columna < 0 ||
+    item.columna > 14 ||
     !['horizontal', 'vertical'].includes(item.direccion) ||
-    (item.direccion === 'horizontal' && item.columna + item.palabra.length > 15) ||
-    (item.direccion === 'vertical' && item.fila + item.palabra.length > 10)
+    (
+      item.direccion === 'horizontal' &&
+      item.columna + item.palabra.length > 15
+    ) ||
+    (
+      item.direccion === 'vertical' &&
+      item.fila + item.palabra.length > 10
+    )
   )
+
   if (invalida) {
-    return res.status(400).json({ mensaje: 'Revisa palabras, pistas y posiciones: deben caber en el tablero de 10 × 15' })
+    return res.status(400).json({
+      mensaje:
+        'Revisa palabras, pistas y posiciones: deben caber en el tablero de 10 × 15'
+    })
   }
 
   const letrasEnTablero = new Map()
+
   for (const item of normalizadas) {
-    for (let indice = 0; indice < item.palabra.length; indice++) {
-      const fila = item.fila + (item.direccion === 'vertical' ? indice : 0)
-      const columna = item.columna + (item.direccion === 'horizontal' ? indice : 0)
+
+    for (
+      let indice = 0;
+      indice < item.palabra.length;
+      indice++
+    ) {
+
+      const fila =
+        item.fila +
+        (
+          item.direccion === 'vertical'
+            ? indice
+            : 0
+        )
+
+      const columna =
+        item.columna +
+        (
+          item.direccion === 'horizontal'
+            ? indice
+            : 0
+        )
+
       const casilla = `${fila},${columna}`
-      if (letrasEnTablero.has(casilla) && letrasEnTablero.get(casilla) !== item.palabra[indice]) {
-        return res.status(400).json({ mensaje: 'Las palabras se cruzan con letras distintas. Ajusta las posiciones antes de guardar.' })
+
+      if (
+        letrasEnTablero.has(casilla) &&
+        letrasEnTablero.get(casilla) !== item.palabra[indice]
+      ) {
+        return res.status(400).json({
+          mensaje:
+            'Las palabras se cruzan con letras distintas. Ajusta las posiciones antes de guardar.'
+        })
       }
-      letrasEnTablero.set(casilla, item.palabra[indice])
+
+      letrasEnTablero.set(
+        casilla,
+        item.palabra[indice]
+      )
     }
   }
 
   let conexionBD
+
   try {
-    const [juegos] = await conexion.query('SELECT id_juego FROM juegos WHERE id_juego = ?', [id])
-    if (!juegos.length) return res.status(404).json({ mensaje: 'El juego no existe' })
+
+    const [juegos] = await conexion.query(
+      'SELECT id_juego FROM juegos WHERE id_juego = ?',
+      [id]
+    )
+
+    if (!juegos.length) {
+      return res.status(404).json({
+        mensaje: 'El juego no existe'
+      })
+    }
 
     conexionBD = await conexion.getConnection()
+
     await conexionBD.beginTransaction()
-    await conexionBD.query('DELETE FROM palabras_crucigrama WHERE id_juego = ?', [id])
+
+    await conexionBD.query(
+      'DELETE FROM palabras_crucigrama WHERE id_juego = ?',
+      [id]
+    )
+
     for (const item of normalizadas) {
-      await conexionBD.query(`
-        INSERT INTO palabras_crucigrama (id_juego, palabra, pista, fila, columna, direccion)
+
+      await conexionBD.query(
+        `
+        INSERT INTO palabras_crucigrama
+        (
+          id_juego,
+          palabra,
+          pista,
+          fila,
+          columna,
+          direccion
+        )
         VALUES (?, ?, ?, ?, ?, ?)
-      `, [id, item.palabra, item.pista, item.fila, item.columna, item.direccion])
+        `,
+        [
+          id,
+          item.palabra,
+          item.pista,
+          item.fila,
+          item.columna,
+          item.direccion
+        ]
+      )
     }
+
     await conexionBD.commit()
-    res.json({ mensaje: 'Crucigrama guardado correctamente' })
+
+    res.json({
+      mensaje: 'Crucigrama guardado correctamente'
+    })
+
   } catch (error) {
-    if (conexionBD) await conexionBD.rollback()
-    console.error('Error al guardar el crucigrama:', error.message)
-    res.status(500).json({ mensaje: 'Error al guardar el crucigrama' })
+
+    if (conexionBD) {
+      await conexionBD.rollback()
+    }
+
+    console.error(
+      'Error al guardar el crucigrama:',
+      error.message
+    )
+
+    res.status(500).json({
+      mensaje: 'Error al guardar el crucigrama'
+    })
+
   } finally {
-    if (conexionBD) conexionBD.release()
+
+    if (conexionBD) {
+      conexionBD.release()
+    }
   }
 })
+
 
 // ========================================
 // OBTENER PREGUNTAS DE UN JUEGO
@@ -437,7 +697,8 @@ app.post('/api/juegos/:id/preguntas', async (req, res) => {
       !respuesta_correcta
     ) {
       return res.status(400).json({
-        mensaje: 'Todos los campos de la pregunta son obligatorios'
+        mensaje:
+          'Todos los campos de la pregunta son obligatorios'
       })
     }
 
@@ -448,7 +709,8 @@ app.post('/api/juegos/:id/preguntas', async (req, res) => {
 
     if (!['A', 'B', 'C', 'D'].includes(respuesta)) {
       return res.status(400).json({
-        mensaje: 'La respuesta correcta debe ser A, B, C o D'
+        mensaje:
+          'La respuesta correcta debe ser A, B, C o D'
       })
     }
 
@@ -531,6 +793,7 @@ app.post('/api/juegos', async (req, res) => {
       descripcion,
       instrucciones,
       id_tipo,
+      id_unidad,
       activo
     } = req.body
 
@@ -538,7 +801,8 @@ app.post('/api/juegos', async (req, res) => {
       !nombre ||
       !descripcion ||
       !instrucciones ||
-      !id_tipo
+      !id_tipo ||
+      !id_unidad
     ) {
       return res.status(400).json({
         mensaje:
@@ -561,6 +825,15 @@ app.post('/api/juegos', async (req, res) => {
       })
     }
 
+    const [unidades] = await conexion.query(
+      'SELECT id_unidad FROM unidades WHERE id_unidad = ?',
+      [id_unidad]
+    )
+
+    if (unidades.length === 0) {
+      return res.status(404).json({ mensaje: 'La unidad seleccionada no existe' })
+    }
+
     const [resultado] = await conexion.query(
       `
       INSERT INTO juegos
@@ -569,16 +842,20 @@ app.post('/api/juegos', async (req, res) => {
         descripcion,
         instrucciones,
         id_tipo,
+        id_unidad,
         activo
       )
-      VALUES (?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?)
       `,
       [
         nombre,
         descripcion,
         instrucciones,
         id_tipo,
-        activo !== undefined ? activo : true
+        id_unidad,
+        activo !== undefined
+          ? activo
+          : true
       ]
     )
 
@@ -591,7 +868,11 @@ app.post('/api/juegos', async (req, res) => {
         descripcion,
         instrucciones,
         id_tipo,
-        activo: activo !== undefined ? activo : true
+        id_unidad,
+        activo:
+          activo !== undefined
+            ? activo
+            : true
       }
     })
 
@@ -620,10 +901,11 @@ app.put('/api/juegos/:id', async (req, res) => {
       nombre,
       descripcion,
       instrucciones,
+      id_unidad,
       activo
     } = req.body
 
-    if (!nombre || !descripcion || !instrucciones) {
+    if (!nombre || !descripcion || !instrucciones || !id_unidad) {
       return res.status(400).json({
         mensaje:
           'Nombre, descripción e instrucciones son obligatorios'
@@ -645,6 +927,15 @@ app.put('/api/juegos/:id', async (req, res) => {
       })
     }
 
+    const [unidades] = await conexion.query(
+      'SELECT id_unidad FROM unidades WHERE id_unidad = ?',
+      [id_unidad]
+    )
+
+    if (unidades.length === 0) {
+      return res.status(404).json({ mensaje: 'La unidad seleccionada no existe' })
+    }
+
     await conexion.query(
       `
       UPDATE juegos
@@ -652,6 +943,7 @@ app.put('/api/juegos/:id', async (req, res) => {
         nombre = ?,
         descripcion = ?,
         instrucciones = ?,
+        id_unidad = ?,
         activo = ?
       WHERE id_juego = ?
       `,
@@ -659,6 +951,7 @@ app.put('/api/juegos/:id', async (req, res) => {
         nombre,
         descripcion,
         instrucciones,
+        id_unidad,
         activo,
         id
       ]
@@ -744,11 +1037,15 @@ app.patch('/api/juegos/:id/desactivar', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   try {
-    const { usuario, contraseña } = req.body
+    const {
+      usuario,
+      contraseña
+    } = req.body
 
     if (!usuario || !contraseña) {
       return res.status(400).json({
-        mensaje: 'Usuario y contraseña son obligatorios'
+        mensaje:
+          'Usuario y contraseña son obligatorios'
       })
     }
 
@@ -757,35 +1054,76 @@ app.post('/api/login', async (req, res) => {
       SELECT
         id_usuario,
         nombre,
-        usuario
+        usuario,
+        contraseña
       FROM usuarios
       WHERE usuario = ?
-      AND contraseña = ?
       `,
-      [usuario, contraseña]
+      [usuario]
     )
 
     if (usuarios.length === 0) {
       return res.status(401).json({
-        mensaje: 'Usuario o contraseña incorrectos'
+        mensaje:
+          'Usuario o contraseña incorrectos'
       })
     }
 
     const usuarioEncontrado = usuarios[0]
 
+    const contraseñaGuardada = String(usuarioEncontrado.contraseña ?? '')
+    const tieneHashBcrypt = /^\$2[aby]\$\d{2}\$/.test(contraseñaGuardada)
+    const contraseñaCorrecta = tieneHashBcrypt
+      ? await bcrypt.compare(contraseña, contraseñaGuardada)
+      : contraseña === contraseñaGuardada
+
+    if (!contraseñaCorrecta) {
+      return res.status(401).json({
+        mensaje:
+          'Usuario o contraseña incorrectos'
+      })
+    }
+
+    // Las cuentas previas al uso de bcrypt conservan la contraseña en texto.
+    // Al iniciar sesión correctamente, se actualizan al formato seguro.
+    if (!tieneHashBcrypt) {
+      try {
+        const contraseñaHash = await bcrypt.hash(contraseña, 10)
+        await conexion.query(
+          'UPDATE usuarios SET contraseña = ? WHERE id_usuario = ?',
+          [contraseñaHash, usuarioEncontrado.id_usuario]
+        )
+      } catch (error) {
+        console.error('No se pudo actualizar el hash de la contraseña:', error.message)
+      }
+    }
+
     res.json({
-      mensaje: 'Inicio de sesión correcto',
-      usuario: usuarioEncontrado
+      mensaje:
+        'Inicio de sesión correcto',
+
+      usuario: {
+        id_usuario:
+          usuarioEncontrado.id_usuario,
+
+        nombre:
+          usuarioEncontrado.nombre,
+
+        usuario:
+          usuarioEncontrado.usuario
+      }
     })
 
   } catch (error) {
+
     console.error(
       'Error en el login:',
       error.message
     )
 
     res.status(500).json({
-      mensaje: 'Error interno del servidor'
+      mensaje:
+        'Error interno del servidor'
     })
   }
 })
@@ -797,59 +1135,95 @@ app.post('/api/login', async (req, res) => {
 
 app.post('/api/registro', async (req, res) => {
   try {
-    const { nombre, usuario, contraseña } = req.body
 
-    if (!nombre || !usuario || !contraseña) {
+    const {
+      nombre,
+      usuario,
+      contraseña
+    } = req.body
+
+    if (
+      !nombre ||
+      !usuario ||
+      !contraseña
+    ) {
       return res.status(400).json({
-        mensaje: 'Todos los campos son obligatorios'
+        mensaje:
+          'Todos los campos son obligatorios'
       })
     }
 
-    const [usuariosExistentes] = await conexion.query(
-      `
-      SELECT id_usuario
-      FROM usuarios
-      WHERE usuario = ?
-      `,
-      [usuario]
-    )
+    const [usuariosExistentes] =
+      await conexion.query(
+        `
+        SELECT id_usuario
+        FROM usuarios
+        WHERE usuario = ?
+        `,
+        [usuario]
+      )
 
     if (usuariosExistentes.length > 0) {
       return res.status(409).json({
-        mensaje: 'Ese usuario ya está registrado'
+        mensaje:
+          'Ese usuario ya está registrado'
       })
     }
 
-    const [resultado] = await conexion.query(
-      `
-      INSERT INTO usuarios
-      (nombre, usuario, contraseña)
-      VALUES (?, ?, ?)
-      `,
-      [nombre, usuario, contraseña]
-    )
+    const contraseñaHash =
+      await bcrypt.hash(
+        contraseña,
+        10
+      )
+
+    const [resultado] =
+      await conexion.query(
+        `
+        INSERT INTO usuarios
+        (
+          nombre,
+          usuario,
+          contraseña
+        )
+        VALUES (?, ?, ?)
+        `,
+        [
+          nombre,
+          usuario,
+          contraseñaHash
+        ]
+      )
 
     res.status(201).json({
-      mensaje: 'Usuario registrado correctamente',
+      mensaje:
+        'Usuario registrado correctamente',
 
       usuario: {
-        id_usuario: resultado.insertId,
-        nombre: nombre,
-        usuario: usuario
+        id_usuario:
+          resultado.insertId,
+
+        nombre:
+          nombre,
+
+        usuario:
+          usuario
       }
     })
 
   } catch (error) {
+
     console.error(
       'Error en el registro:',
       error.message
     )
 
     res.status(500).json({
-      mensaje: 'Error interno del servidor'
+      mensaje:
+        'Error interno del servidor'
     })
   }
 })
+
 
 // ========================================
 // OBTENER ENIGMAS DEL JUEGO DETECTIVE
@@ -891,6 +1265,7 @@ app.get('/api/juegos/:id/enigmas', async (req, res) => {
   }
 })
 
+
 // ========================================
 // GUARDAR ENIGMAS DEL JUEGO DETECTIVE
 // ========================================
@@ -899,36 +1274,50 @@ app.put('/api/juegos/:id/enigmas', async (req, res) => {
   const { id } = req.params
   const enigmas = req.body.enigmas
 
-  // Comprobar que se haya enviado al menos un enigma
-  if (!Array.isArray(enigmas) || enigmas.length === 0) {
+  if (
+    !Array.isArray(enigmas) ||
+    enigmas.length === 0
+  ) {
     return res.status(400).json({
-      mensaje: 'Agrega al menos un enigma al juego Detective'
+      mensaje:
+        'Agrega al menos un enigma al juego Detective'
     })
   }
 
-  // Limpiar los datos recibidos
   const normalizados = enigmas.map((item) => ({
-    materia: String(item.materia || '').trim(),
-    titulo: String(item.titulo || '').trim(),
-    respuesta: String(item.respuesta || '').trim(),
-    pista_1: String(item.pista_1 || '').trim(),
-    pista_2: String(item.pista_2 || '').trim(),
-    pista_3: String(item.pista_3 || '').trim()
+    materia:
+      String(item.materia || '').trim(),
+
+    titulo:
+      String(item.titulo || '').trim(),
+
+    respuesta:
+      String(item.respuesta || '').trim(),
+
+    pista_1:
+      String(item.pista_1 || '').trim(),
+
+    pista_2:
+      String(item.pista_2 || '').trim(),
+
+    pista_3:
+      String(item.pista_3 || '').trim()
   }))
 
-  // Verificar que ningún campo esté vacío
-  const hayCamposVacios = normalizados.some((item) =>
-    !item.materia ||
-    !item.titulo ||
-    !item.respuesta ||
-    !item.pista_1 ||
-    !item.pista_2 ||
-    !item.pista_3
-  )
+  const hayCamposVacios =
+    normalizados.some((item) =>
+      !item.materia ||
+      !item.titulo ||
+      !item.respuesta ||
+      !item.pista_1 ||
+      !item.pista_2 ||
+      !item.pista_3
+    )
 
   if (hayCamposVacios) {
     return res.status(400).json({
-      mensaje: 'Todos los campos de los enigmas son obligatorios'
+      mensaje:
+        'Todos los campos de los enigmas son obligatorios'
     })
   }
 
@@ -936,30 +1325,29 @@ app.put('/api/juegos/:id/enigmas', async (req, res) => {
 
   try {
 
-    // Comprobar que el juego existe
-    const [juegos] = await conexion.query(
-      'SELECT id_juego FROM juegos WHERE id_juego = ?',
-      [id]
-    )
+    const [juegos] =
+      await conexion.query(
+        'SELECT id_juego FROM juegos WHERE id_juego = ?',
+        [id]
+      )
 
     if (!juegos.length) {
       return res.status(404).json({
-        mensaje: 'El juego no existe'
+        mensaje:
+          'El juego no existe'
       })
     }
 
-    // Obtener una conexión para la transacción
-    conexionBD = await conexion.getConnection()
+    conexionBD =
+      await conexion.getConnection()
 
     await conexionBD.beginTransaction()
 
-    // Eliminar enigmas anteriores
     await conexionBD.query(
       'DELETE FROM enigmas_detective WHERE id_juego = ?',
       [id]
     )
 
-    // Insertar los nuevos enigmas
     for (const enigma of normalizados) {
 
       await conexionBD.query(
@@ -991,7 +1379,8 @@ app.put('/api/juegos/:id/enigmas', async (req, res) => {
     await conexionBD.commit()
 
     res.json({
-      mensaje: 'Enigmas del Detective guardados correctamente'
+      mensaje:
+        'Enigmas del Detective guardados correctamente'
     })
 
   } catch (error) {
@@ -1006,7 +1395,8 @@ app.put('/api/juegos/:id/enigmas', async (req, res) => {
     )
 
     res.status(500).json({
-      mensaje: 'Error al guardar los enigmas del Detective'
+      mensaje:
+        'Error al guardar los enigmas del Detective'
     })
 
   } finally {
@@ -1016,6 +1406,7 @@ app.put('/api/juegos/:id/enigmas', async (req, res) => {
     }
   }
 })
+
 
 // ========================================
 // OBTENER PAREJAS DEL MEMORAMA
@@ -1049,10 +1440,13 @@ app.get('/api/juegos/:id/memorama', async (req, res) => {
     )
 
     res.status(500).json({
-      mensaje: 'Error al obtener las parejas del memorama'
+      mensaje:
+        'Error al obtener las parejas del memorama'
     })
   }
 })
+
+
 // ========================================
 // GUARDAR PAREJAS DEL MEMORAMA
 // ========================================
@@ -1061,42 +1455,56 @@ app.put('/api/juegos/:id/memorama', async (req, res) => {
   const { id } = req.params
   const parejas = req.body.parejas
 
-  if (!Array.isArray(parejas) || parejas.length === 0) {
+  if (
+    !Array.isArray(parejas) ||
+    parejas.length === 0
+  ) {
     return res.status(400).json({
-      mensaje: 'Agrega al menos una pareja al memorama'
+      mensaje:
+        'Agrega al menos una pareja al memorama'
     })
   }
 
   const normalizadas = parejas.map((item) => ({
-    elemento_1: String(item.elemento_1 || '').trim(),
-    elemento_2: String(item.elemento_2 || '').trim()
+    elemento_1:
+      String(item.elemento_1 || '').trim(),
+
+    elemento_2:
+      String(item.elemento_2 || '').trim()
   }))
 
   if (
     normalizadas.some(
-      (item) => !item.elemento_1 || !item.elemento_2
+      (item) =>
+        !item.elemento_1 ||
+        !item.elemento_2
     )
   ) {
     return res.status(400).json({
-      mensaje: 'Todos los elementos de las parejas son obligatorios'
+      mensaje:
+        'Todos los elementos de las parejas son obligatorios'
     })
   }
 
   let conexionBD
 
   try {
-    const [juegos] = await conexion.query(
-      'SELECT id_juego FROM juegos WHERE id_juego = ?',
-      [id]
-    )
+
+    const [juegos] =
+      await conexion.query(
+        'SELECT id_juego FROM juegos WHERE id_juego = ?',
+        [id]
+      )
 
     if (!juegos.length) {
       return res.status(404).json({
-        mensaje: 'El juego no existe'
+        mensaje:
+          'El juego no existe'
       })
     }
 
-    conexionBD = await conexion.getConnection()
+    conexionBD =
+      await conexion.getConnection()
 
     await conexionBD.beginTransaction()
 
@@ -1106,6 +1514,7 @@ app.put('/api/juegos/:id/memorama', async (req, res) => {
     )
 
     for (const pareja of normalizadas) {
+
       await conexionBD.query(
         `
         INSERT INTO parejas_memorama
@@ -1127,7 +1536,8 @@ app.put('/api/juegos/:id/memorama', async (req, res) => {
     await conexionBD.commit()
 
     res.json({
-      mensaje: 'Parejas del memorama guardadas correctamente'
+      mensaje:
+        'Parejas del memorama guardadas correctamente'
     })
 
   } catch (error) {
@@ -1142,7 +1552,8 @@ app.put('/api/juegos/:id/memorama', async (req, res) => {
     )
 
     res.status(500).json({
-      mensaje: 'Error al guardar las parejas del memorama'
+      mensaje:
+        'Error al guardar las parejas del memorama'
     })
 
   } finally {
@@ -1152,6 +1563,8 @@ app.put('/api/juegos/:id/memorama', async (req, res) => {
     }
   }
 })
+
+
 // ========================================
 // OBTENER PALABRAS DEL CRUCIGRAMA
 // ========================================
@@ -1180,22 +1593,27 @@ app.get('/api/juegos/:id/crucigrama', async (req, res) => {
     res.json(palabras)
 
   } catch (error) {
+
     console.error(
       'Error al obtener las palabras del crucigrama:',
       error.message
     )
 
     res.status(500).json({
-      mensaje: 'Error al obtener las palabras del crucigrama'
+      mensaje:
+        'Error al obtener las palabras del crucigrama'
     })
   }
 })
+
+
 // ========================================
 // GUARDAR RESULTADO
 // ========================================
 
 app.post('/api/resultados', async (req, res) => {
   try {
+
     const {
       id_usuario,
       id_juego,
@@ -1218,93 +1636,106 @@ app.post('/api/resultados', async (req, res) => {
       puntuacion === undefined
     ) {
       return res.status(400).json({
-        mensaje: 'Todos los datos del resultado son obligatorios'
+        mensaje:
+          'Todos los datos del resultado son obligatorios'
       })
     }
 
-    // Comprobar usuario
-    const [usuarios] = await conexion.query(
-      `
-      SELECT id_usuario
-      FROM usuarios
-      WHERE id_usuario = ?
-      `,
-      [id_usuario]
-    )
+    const [usuarios] =
+      await conexion.query(
+        `
+        SELECT id_usuario
+        FROM usuarios
+        WHERE id_usuario = ?
+        `,
+        [id_usuario]
+      )
 
     if (usuarios.length === 0) {
       return res.status(404).json({
-        mensaje: 'El usuario no existe'
+        mensaje:
+          'El usuario no existe'
       })
     }
 
-    // Comprobar juego
-    const [juegos] = await conexion.query(
-      `
-      SELECT id_juego
-      FROM juegos
-      WHERE id_juego = ?
-      `,
-      [id_juego]
-    )
+    const [juegos] =
+      await conexion.query(
+        `
+        SELECT id_juego
+        FROM juegos
+        WHERE id_juego = ?
+        `,
+        [id_juego]
+      )
 
     if (juegos.length === 0) {
       return res.status(404).json({
-        mensaje: 'El juego no existe'
+        mensaje:
+          'El juego no existe'
       })
     }
 
-    // Guardar resultado
-    const [resultado] = await conexion.query(
-      `
-      INSERT INTO resultados
-      (
-        id_usuario,
-        id_juego,
-        fecha,
-        hora_inicio,
-        hora_fin,
-        tiempo_transcurrido,
-        aciertos,
-        errores,
-        puntuacion
+    const [resultado] =
+      await conexion.query(
+        `
+        INSERT INTO resultados
+        (
+          id_usuario,
+          id_juego,
+          fecha,
+          hora_inicio,
+          hora_fin,
+          tiempo_transcurrido,
+          aciertos,
+          errores,
+          puntuacion
+        )
+        VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          id_usuario,
+          id_juego,
+          hora_inicio,
+          hora_fin,
+          tiempo_transcurrido,
+          aciertos,
+          errores,
+          puntuacion
+        ]
       )
-      VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        id_usuario,
-        id_juego,
-        hora_inicio,
-        hora_fin,
-        tiempo_transcurrido,
-        aciertos,
-        errores,
-        puntuacion
-      ]
-    )
 
     res.status(201).json({
-      mensaje: 'Resultado guardado correctamente',
+      mensaje:
+        'Resultado guardado correctamente',
 
       resultado: {
-        id_resultado: resultado.insertId,
+        id_resultado:
+          resultado.insertId,
+
         id_usuario,
+
         id_juego,
+
         tiempo_transcurrido,
+
         aciertos,
+
         errores,
+
         puntuacion
       }
     })
 
   } catch (error) {
+
     console.error(
       'Error al guardar el resultado:',
       error.message
     )
 
     res.status(500).json({
-      mensaje: 'Error interno del servidor'
+      mensaje:
+        'Error interno del servidor'
     })
   }
 })
@@ -1316,44 +1747,52 @@ app.post('/api/resultados', async (req, res) => {
 
 app.get('/api/resultados/usuario/:id', async (req, res) => {
   try {
+
     const { id } = req.params
 
-    const [resultados] = await conexion.query(
-      `
-      SELECT
-        r.id_resultado,
-        r.id_usuario,
-        r.id_juego,
-        j.nombre AS juego,
-        t.nombre AS tipo,
-        r.fecha,
-        r.hora_inicio,
-        r.hora_fin,
-        r.tiempo_transcurrido,
-        r.aciertos,
-        r.errores,
-        r.puntuacion
-      FROM resultados r
-      INNER JOIN juegos j
-        ON r.id_juego = j.id_juego
-      INNER JOIN tipos_juego t
-        ON j.id_tipo = t.id_tipo
-      WHERE r.id_usuario = ?
-      ORDER BY r.id_resultado DESC
-      `,
-      [id]
-    )
+    const [resultados] =
+      await conexion.query(
+        `
+        SELECT
+          r.id_resultado,
+          r.id_usuario,
+          r.id_juego,
+          u.id_unidad,
+          u.nombre AS unidad,
+          j.nombre AS juego,
+          t.nombre AS tipo,
+          r.fecha,
+          r.hora_inicio,
+          r.hora_fin,
+          r.tiempo_transcurrido,
+          r.aciertos,
+          r.errores,
+          r.puntuacion
+        FROM resultados r
+        INNER JOIN juegos j
+          ON r.id_juego = j.id_juego
+        LEFT JOIN unidades u
+          ON j.id_unidad = u.id_unidad
+        INNER JOIN tipos_juego t
+          ON j.id_tipo = t.id_tipo
+        WHERE r.id_usuario = ?
+        ORDER BY r.id_resultado DESC
+        `,
+        [id]
+      )
 
     res.json(resultados)
 
   } catch (error) {
+
     console.error(
       'Error al obtener el historial:',
       error.message
     )
 
     res.status(500).json({
-      mensaje: 'Error al obtener el historial'
+      mensaje:
+        'Error al obtener el historial'
     })
   }
 })
@@ -1363,8 +1802,10 @@ app.get('/api/resultados/usuario/:id', async (req, res) => {
 // INICIAR SERVIDOR
 // ========================================
 
-app.listen(PORT, () => {
-  console.log(
-    `🚀 Servidor ejecutándose en http://localhost:${PORT}`
-  )
+conexion.preparacion.then(() => {
+  app.listen(PORT, () => {
+    console.log(
+      `🚀 Servidor ejecutándose en http://localhost:${PORT}`
+    )
+  })
 })

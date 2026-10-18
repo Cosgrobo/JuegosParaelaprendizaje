@@ -1,10 +1,9 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
 import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
 
-const router = useRouter()
 const route = useRoute()
 const idJuego = computed(() => Number(route.params.id))
 
@@ -25,6 +24,8 @@ const rotacion = ref(0)
 const respuestaSeleccionada = ref(null)
 const respondida = ref(false)
 const mensaje = ref('')
+const mostrarResultado = ref(false)
+const respuestaFueCorrecta = ref(false)
 
 const aciertos = ref(0)
 const errores = ref(0)
@@ -260,6 +261,7 @@ const seleccionarRespuesta = (indice) => {
   }
 
   respuestaSeleccionada.value = indice
+  comprobarRespuesta()
 }
 
 // ==========================================
@@ -278,10 +280,12 @@ const comprobarRespuesta = () => {
   respondida.value = true
   respondidas.value++
 
-  if (
+  respuestaFueCorrecta.value = (
     respuestaSeleccionada.value ===
     preguntaSeleccionada.value.respuesta
-  ) {
+  )
+
+  if (respuestaFueCorrecta.value) {
     aciertos.value++
     puntuacion.value += 100
 
@@ -324,6 +328,8 @@ const comprobarRespuesta = () => {
       })
     }
   }
+
+  mostrarResultado.value = true
 }
 
 // ==========================================
@@ -384,12 +390,31 @@ const reiniciarJuego = () => {
   respuestaSeleccionada.value = null
   respondida.value = false
   mensaje.value = ''
+  mostrarResultado.value = false
 
   rotacion.value = 0
 
   temporizador = setInterval(() => {
     segundos.value++
   }, 1000)
+}
+
+const girarOtraVez = () => {
+  mostrarResultado.value = false
+
+  if (juegoTerminado.value) {
+    reiniciarJuego()
+  }
+
+  girarRuleta()
+}
+
+const cerrarPregunta = () => {
+  preguntaSeleccionada.value = null
+  respuestaSeleccionada.value = null
+  respondida.value = false
+  mensaje.value = ''
+  mostrarResultado.value = false
 }
 
 // ==========================================
@@ -423,16 +448,7 @@ onUnmounted(() => {
 
     <header class="header">
 
-      <button
-        class="volver"
-        @click="router.push('/home')"
-      >
-        ← Volver
-      </button>
-
       <div>
-        <h1>🎡 Ruleta de preguntas</h1>
-
         <p>
           Gira la ruleta y responde las preguntas.
         </p>
@@ -522,24 +538,19 @@ onUnmounted(() => {
 
         </div>
 
+        <div v-if="preguntaSeleccionada" class="pregunta-overlay">
+          <div class="pregunta-backdrop" aria-hidden="true"></div>
 
+          <section class="pregunta-card">
         <button
-          class="boton-girar"
-          :disabled="girando || juegoTerminado"
-          @click="girarRuleta"
+          type="button"
+          class="cerrar-pregunta"
+          aria-label="Cerrar pregunta"
+          title="Cerrar pregunta"
+          @click="cerrarPregunta"
         >
-          {{ girando ? 'Girando...' : juegoTerminado ? 'Partida terminada' : '🎡 Girar ruleta' }}
+          ×
         </button>
-
-      </section>
-
-
-      <!-- PREGUNTA -->
-
-      <section
-        v-if="preguntaSeleccionada"
-        class="pregunta-card"
-      >
 
         <span class="categoria">
           {{ preguntaSeleccionada.categoria }}
@@ -572,16 +583,6 @@ onUnmounted(() => {
         </div>
 
 
-        <button
-          v-if="!respondida"
-          class="comprobar"
-          :disabled="respuestaSeleccionada === null"
-          @click="comprobarRespuesta"
-        >
-          Comprobar respuesta
-        </button>
-
-
         <div
           v-if="mensaje"
           class="mensaje"
@@ -592,28 +593,68 @@ onUnmounted(() => {
 
         <button
           v-if="respondida"
+          type="button"
           class="otra"
-          @click="girarRuleta"
+          @click="girarOtraVez"
         >
-          🎡 Girar nuevamente
+          🎡 Girar otra vez
         </button>
 
-      </section>
+          </section>
+        </div>
 
+        <div v-if="mostrarResultado" class="resultado-overlay">
+          <div class="resultado-backdrop" aria-hidden="true"></div>
 
-      <!-- REINICIAR -->
+          <section
+            class="resultado-card"
+            :class="respuestaFueCorrecta ? 'es-correcta' : 'es-incorrecta'"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="respuestaFueCorrecta ? 'Respuesta correcta' : 'Respuesta incorrecta'"
+          >
+            <span class="resultado-icono" aria-hidden="true">
+              {{ respuestaFueCorrecta ? '✓' : '×' }}
+            </span>
+            <h2>{{ respuestaFueCorrecta ? '¡Correcto!' : '¡Incorrecto!' }}</h2>
+            <p class="resultado-detalle">
+              {{ respuestaFueCorrecta
+                ? 'Sumaste 100 puntos.'
+                : `La respuesta correcta era: ${preguntaSeleccionada.opciones[preguntaSeleccionada.respuesta]}` }}
+            </p>
 
-      <section class="acciones">
+            <div class="resultado-estadisticas">
+              <div><strong>{{ puntuacion }}</strong><span>Puntos</span></div>
+              <div><strong>{{ tiempoFormateado }}</strong><span>Tiempo</span></div>
+              <div><strong>{{ aciertos }}</strong><span>Aciertos</span></div>
+              <div><strong>{{ errores }}</strong><span>Errores</span></div>
+              <div class="progreso-respuestas">
+                <strong>{{ respondidas }} / {{ preguntas.length }}</strong>
+                <span>Preguntas respondidas</span>
+              </div>
+            </div>
+
+            <div class="resultado-acciones">
+              <button type="button" class="resultado-continuar" @click="girarOtraVez">
+                🎡 Girar otra vez
+              </button>
+              <button type="button" class="resultado-cerrar" @click="mostrarResultado = false">
+                Ver pregunta
+              </button>
+            </div>
+          </section>
+        </div>
 
         <button
-          class="reiniciar"
-          @click="reiniciarJuego"
+          v-if="!preguntaSeleccionada"
+          class="boton-girar"
+          :disabled="girando || juegoTerminado"
+          @click="girarRuleta"
         >
-          🔄 Nuevo juego
+          {{ girando ? 'Girando...' : juegoTerminado ? 'Partida terminada' : '🎡 Girar ruleta' }}
         </button>
 
       </section>
-
     </main>
 
   </div>
@@ -650,6 +691,7 @@ onUnmounted(() => {
 
   display: flex;
   align-items: center;
+  justify-content: center;
 
   gap: 30px;
 
@@ -672,18 +714,9 @@ onUnmounted(() => {
   font-size: 18px;
 }
 
-.volver {
-  padding: 12px 18px;
-
-  border: none;
-  border-radius: 10px;
-
-  background: #e2e8f0;
-
-  cursor: pointer;
-
-  font-size: 15px;
-  font-weight: 600;
+.header > div {
+  text-align: center;
+  transform: translateX(20px);
 }
 
 /* ============================= */
@@ -854,19 +887,193 @@ onUnmounted(() => {
 /* PREGUNTA */
 /* ============================= */
 
+.pregunta-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.pregunta-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(15, 23, 42, .38);
+  backdrop-filter: blur(6px);
+  animation: aparecer-fondo .22s ease-out;
+}
+
 .pregunta-card {
-  max-width: 850px;
+  position: relative;
+  z-index: 1;
+  width: min(700px, calc(100vw - 40px));
+  max-height: min(76vh, 620px);
+  overflow-y: auto;
+  pointer-events: auto;
+  padding: 26px;
+  border: 1px solid rgba(255, 255, 255, .8);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .38);
+  backdrop-filter: blur(12px);
+}
 
-  margin: 0 auto;
+.cerrar-pregunta {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 50%;
+  background: #fff;
+  color: #475569;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, transform .18s ease;
+}
 
-  padding: 30px;
+.cerrar-pregunta:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+  transform: rotate(90deg);
+}
 
-  background: white;
+@keyframes aparecer-fondo {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to { opacity: 1; backdrop-filter: blur(6px); }
+}
 
-  border-radius: 18px;
+.resultado-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  pointer-events: none;
+}
 
-  box-shadow:
-    0 4px 18px rgba(0, 0, 0, 0.08);
+.resultado-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .42);
+  backdrop-filter: blur(8px);
+}
+
+.resultado-card {
+  position: relative;
+  width: min(560px, 100%);
+  padding: 34px;
+  border: 1px solid rgba(255, 255, 255, .8);
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, .4);
+  text-align: center;
+  pointer-events: auto;
+  animation: resultado-entrada .25s ease-out;
+}
+
+.resultado-icono {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 14px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 44px;
+  font-weight: 800;
+}
+
+.es-correcta .resultado-icono {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.es-incorrecta .resultado-icono {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.resultado-card h2 {
+  margin: 0;
+  color: #172033;
+  font-size: clamp(32px, 7vw, 44px);
+}
+
+.resultado-detalle {
+  margin: 10px 0 24px;
+  color: #64748b;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.resultado-estadisticas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.resultado-estadisticas > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 10px;
+  border-radius: 16px;
+  background: #f1f5f9;
+}
+
+.resultado-estadisticas strong {
+  color: #312e81;
+  font-size: 22px;
+}
+
+.resultado-estadisticas span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.resultado-estadisticas .progreso-respuestas {
+  grid-column: 1 / -1;
+}
+
+.resultado-acciones {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.resultado-acciones button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.resultado-continuar {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.resultado-continuar:hover {
+  background: #4338ca;
+}
+
+.resultado-cerrar {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+@keyframes resultado-entrada {
+  from { opacity: 0; transform: translateY(12px) scale(.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .categoria {
@@ -1013,25 +1220,6 @@ onUnmounted(() => {
   font-weight: bold;
 }
 
-.acciones {
-  margin-top: 35px;
-
-  text-align: center;
-}
-
-.reiniciar {
-  padding: 12px 20px;
-
-  border: none;
-  border-radius: 10px;
-
-  background: #e2e8f0;
-
-  cursor: pointer;
-
-  font-weight: bold;
-}
-
 /* ============================= */
 /* RESPONSIVE */
 /* ============================= */
@@ -1068,6 +1256,31 @@ onUnmounted(() => {
   .opciones {
     grid-template-columns: 1fr;
   }
+
+  .pregunta-card {
+    width: min(540px, calc(100vw - 32px));
+    max-height: 70vh;
+    padding: 18px;
+  }
+
+  .pregunta-card h2 {
+    margin-bottom: 16px;
+    font-size: 20px;
+  }
+
+  .resultado-card {
+    padding: 24px 18px;
+    border-radius: 22px;
+  }
 }
 
+</style>
+
+<style scoped>
+.resultado-card.es-correcta{background:#16a34a;color:#fff;border-color:rgba(255,255,255,.5)}
+.resultado-card.es-incorrecta{background:#dc2626;color:#fff;border-color:rgba(255,255,255,.5)}
+.resultado-card h2,.resultado-card .resultado-detalle,.resultado-card .resultado-estadisticas strong,.resultado-card .resultado-estadisticas span{color:#fff}
+.resultado-card .resultado-icono{background:rgba(255,255,255,.2);color:#fff}
+.resultado-card .resultado-estadisticas>div{background:rgba(255,255,255,.16)}
+.resultado-card .resultado-continuar,.resultado-card .resultado-cerrar{background:rgba(255,255,255,.95);color:#172033}
 </style>

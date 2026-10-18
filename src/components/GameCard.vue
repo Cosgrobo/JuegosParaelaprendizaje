@@ -4,7 +4,8 @@ const props = defineProps({
   title: String,
   description: String,
   icon: String,
-  route: String
+  route: String,
+  unit: String
 })
 
 const desactivarJuego = async () => {
@@ -79,6 +80,7 @@ const desactivarJuego = async () => {
     </div>
 
     <div class="game-content">
+      <span v-if="unit" class="game-unit">{{ unit }}</span>
       <h3>{{ title }}</h3>
 
       <p>{{ description }}</p>
@@ -190,6 +192,20 @@ const desactivarJuego = async () => {
 
 .game-content {
   flex: 1;
+}
+
+.game-unit {
+  display: flex;
+  width: fit-content;
+  justify-content: center;
+  margin: 0 auto 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .game-content h3 {

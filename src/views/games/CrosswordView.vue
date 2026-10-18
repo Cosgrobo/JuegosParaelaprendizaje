@@ -1,4 +1,4 @@
-```vue
+
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
@@ -2002,4 +2002,18 @@ onUnmounted(() => {
 
 }
 
+</style>
+
+<style scoped>
+.game-over { position: fixed; z-index: 1100; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(560px,calc(100vw - 32px)); padding: 34px; border: 1px solid rgba(255,255,255,.8); border-radius: 28px; background: #fff; box-shadow: 0 30px 90px rgba(15,23,42,.4), 0 0 0 100vmax rgba(15,23,42,.42); text-align: center; }
+
+.final-stats { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 24px 0; }
+.final-stats p { display: grid; gap: 4px; margin: 0; padding: 14px 10px; border-radius: 16px; background: #f1f5f9; }
+@media(max-width:560px){.game-over{padding:24px 18px}.final-stats{gap:8px}}
+</style>
+
+<style scoped>
+.game-over{background:#16a34a;color:#fff;border-color:rgba(255,255,255,.55)}
+.game-over h2,.game-over p,.game-over strong{color:#fff}
+.final-stats p{background:rgba(255,255,255,.17)}
 </style>

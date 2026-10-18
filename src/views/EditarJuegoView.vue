@@ -11,6 +11,8 @@ const descripcion = ref('')
 const instrucciones = ref('')
 const activo = ref(true)
 const tipo = ref('')
+const unidades = ref([])
+const idUnidad = ref('')
 const palabrasSopa = ref([])
 const palabrasCrucigrama = ref([])
 
@@ -32,11 +34,19 @@ const obtenerJuego = async () => {
 
     const juego = await respuesta.json()
 
+    const respuestaUnidades = await fetch('http://localhost:3000/api/unidades')
+    const datosUnidades = await respuestaUnidades.json()
+    if (!respuestaUnidades.ok) {
+      throw new Error(datosUnidades.mensaje || 'No se pudieron cargar las unidades')
+    }
+
     nombre.value = juego.nombre
     descripcion.value = juego.descripcion
     instrucciones.value = juego.instrucciones
     activo.value = Boolean(juego.activo)
     tipo.value = juego.tipo
+    unidades.value = datosUnidades
+    idUnidad.value = juego.id_unidad ? String(juego.id_unidad) : ''
     if (tipo.value === 'Sopa de letras') {
       const contenido = await fetch(`http://localhost:3000/api/juegos/${route.params.id}/palabras-sopa`)
       palabrasSopa.value = await contenido.json()
@@ -80,6 +90,7 @@ const guardarCambios = async () => {
           nombre: nombre.value,
           descripcion: descripcion.value,
           instrucciones: instrucciones.value,
+          id_unidad: idUnidad.value,
           activo: activo.value
         })
       }
@@ -206,6 +217,19 @@ onMounted(() => {
         </div>
 
         <div class="campo"><label>Tipo de juego</label><input :value="tipo" disabled></div>
+
+        <div class="campo">
+          <label for="id-unidad">Unidad</label>
+          <select id="id-unidad" v-model="idUnidad" required>
+            <option value="" disabled>Selecciona una unidad</option>
+            <option v-for="unidad in unidades" :key="unidad.id_unidad" :value="unidad.id_unidad">
+              {{ unidad.nombre }}
+            </option>
+          </select>
+          <small v-if="unidades.length === 0">
+            Crea una unidad al crear un juego y vuelve a esta pantalla para asignarla.
+          </small>
+        </div>
 
         <section v-if="tipo === 'Sopa de letras'" class="contenido-editor">
           <h2>Palabras de la sopa</h2>
@@ -349,7 +373,8 @@ form {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
 
   box-sizing: border-box;
@@ -372,7 +397,8 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: #4f46e5;
 
   box-shadow:

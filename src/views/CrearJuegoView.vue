@@ -35,6 +35,43 @@
           ></textarea>
         </div>
 
+        <div class="campo">
+          <label for="id-unidad">Unidad</label>
+          <select id="id-unidad" v-model="idUnidad" required>
+            <option value="" disabled>Selecciona una unidad</option>
+            <option v-for="unidad in unidades" :key="unidad.id_unidad" :value="unidad.id_unidad">
+              {{ unidad.nombre }}
+            </option>
+          </select>
+
+          <button
+            type="button"
+            class="btn-agregar"
+            @click="mostrarFormularioUnidad = !mostrarFormularioUnidad"
+          >
+            {{ mostrarFormularioUnidad ? 'Cancelar' : '+ Crear unidad' }}
+          </button>
+
+          <div v-if="mostrarFormularioUnidad" class="unidad-formulario">
+            <input
+              v-model="nombreUnidadNueva"
+              type="text"
+              maxlength="100"
+              placeholder="Ej. Unidad 1: Los seres vivos"
+              aria-label="Nombre de la unidad nueva"
+            >
+            <button
+              type="button"
+              class="btn-crear-unidad"
+              :disabled="creandoUnidad || !nombreUnidadNueva.trim()"
+              @click="crearUnidad"
+            >
+              {{ creandoUnidad ? 'Guardando...' : 'Guardar unidad' }}
+            </button>
+            <p v-if="errorUnidad" class="error-unidad" role="alert">{{ errorUnidad }}</p>
+          </div>
+        </div>
+
         <div v-if="tipoSeleccionado === 'Crucigrama'" class="configuracion-sopa">
           <h2>Palabras del crucigrama</h2>
           <p class="ayuda">Escribe la respuesta y una pista. Indica la casilla inicial (fila 1–10, columna 1–15) y la dirección. Evita que las palabras se crucen con letras distintas.</p>
@@ -412,6 +449,12 @@ const nombre = ref('')
 const descripcion = ref('')
 const instrucciones = ref('')
 const idTipo = ref('')
+const idUnidad = ref('')
+const unidades = ref([])
+const mostrarFormularioUnidad = ref(false)
+const nombreUnidadNueva = ref('')
+const creandoUnidad = ref(false)
+const errorUnidad = ref('')
 
 
 // ========================================
@@ -544,6 +587,52 @@ async function cargarTipos() {
 
 }
 
+async function cargarUnidades() {
+  try {
+    const respuesta = await fetch('http://localhost:3000/api/unidades')
+    const datos = await respuesta.json()
+
+    if (!respuesta.ok) {
+      throw new Error(datos.mensaje || 'No se pudieron cargar las unidades')
+    }
+
+    unidades.value = datos
+  } catch (error) {
+    console.error('Error al cargar unidades:', error)
+    errorUnidad.value = error.message || 'No se pudieron cargar las unidades'
+  }
+}
+
+async function crearUnidad() {
+  const nombre = nombreUnidadNueva.value.trim()
+  if (!nombre || creandoUnidad.value) return
+
+  creandoUnidad.value = true
+  errorUnidad.value = ''
+
+  try {
+    const respuesta = await fetch('http://localhost:3000/api/unidades', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre })
+    })
+    const datos = await respuesta.json()
+
+    if (!respuesta.ok) {
+      throw new Error(datos.mensaje || 'No se pudo crear la unidad')
+    }
+
+    unidades.value.push(datos.unidad)
+    idUnidad.value = String(datos.unidad.id_unidad)
+    nombreUnidadNueva.value = ''
+    mostrarFormularioUnidad.value = false
+  } catch (error) {
+    errorUnidad.value = error.message || 'No se pudo crear la unidad'
+  } finally {
+    creandoUnidad.value = false
+  }
+}
+
 
 // ========================================
 // AGREGAR PALABRA
@@ -630,6 +719,7 @@ async function crearJuego() {
           descripcion: descripcion.value,
           instrucciones: instrucciones.value,
           id_tipo: idTipo.value,
+          id_unidad: idUnidad.value,
           activo: true
         })
       }
@@ -679,7 +769,14 @@ async function crearJuego() {
           })
         }
       )
-const datosCrucigrama = await respuestaCrucigrama.json()
+      const datosCrucigrama = await respuestaCrucigrama.json()
+
+      if (!respuestaCrucigrama.ok) {
+        throw new Error(
+          datosCrucigrama.mensaje ||
+          'No se pudo guardar el crucigrama'
+        )
+      }
 
       } else if (['Ruleta', 'Quiz', 'Preguntas'].includes(tipoSeleccionado.value)) {
         for (const item of preguntasOpcionMultiple.value) {
@@ -703,13 +800,6 @@ const datosCrucigrama = await respuestaCrucigrama.json()
             throw new Error(datosPregunta.mensaje || 'No se pudo guardar una pregunta de la ruleta')
           }
         }
-
-if (!respuestaCrucigrama.ok) {
-  throw new Error(
-    datosCrucigrama.mensaje ||
-    'No se pudo guardar el crucigrama'
-  )
-}
 
 } else if (tipoSeleccionado.value === 'Memorama') {
 
@@ -842,6 +932,7 @@ function cancelar() {
 onMounted(() => {
 
   cargarTipos()
+  cargarUnidades()
 
 })
 
@@ -979,6 +1070,35 @@ h1 {
 
 .btn-agregar:hover {
   background: #f0f0f0;
+}
+
+.unidad-formulario {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.btn-crear-unidad {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #4f46e5;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-crear-unidad:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.error-unidad {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #b91c1c;
+  font-size: 14px;
 }
 
 

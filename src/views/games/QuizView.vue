@@ -973,3 +973,18 @@ const regresar = () => {
 
 </style>
 
+
+<style scoped>
+.result-container{position:fixed;inset:0;z-index:1100;min-height:0;padding:18px;background:rgba(15,23,42,.42);backdrop-filter:blur(8px)}
+.result-card{width:min(560px,100%);padding:34px;border:1px solid rgba(255,255,255,.8);border-radius:28px;box-shadow:0 30px 90px rgba(15,23,42,.4)}
+@media(max-width:560px){.result-card{padding:24px 18px}}
+</style>
+<style scoped>
+.result-card{background:#16a34a;color:#fff;border-color:rgba(255,255,255,.55)}
+.result-card h1,.result-card p,.result-card span,.result-card .stat strong,.result-card .stat span{color:#fff}
+.result-card .final-score strong{color:#fff}.result-card .stat,.result-card .trophy{background:rgba(255,255,255,.17);border-radius:14px}
+</style>
+<style scoped>
+.correct-text,.incorrect-text{padding:12px 16px;border-radius:12px;color:#fff!important}
+.correct-text{background:#16a34a}.incorrect-text{background:#dc2626}
+</style>

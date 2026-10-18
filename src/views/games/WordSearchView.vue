@@ -6,7 +6,7 @@ import {
   onUnmounted
 } from 'vue'
 
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
 import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
 
@@ -15,6 +15,7 @@ import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
 // ==========================================
 
 const route = useRoute()
+const router = useRouter()
 
 const idJuego = route.params.id
 
@@ -774,7 +775,9 @@ const validarSeleccionAutomatica = (finalizada = false) => {
   }
 
   if (!seleccionEsValida()) {
-    registrarError('Las letras deben estar en línea recta.')
+    if (finalizada) {
+      registrarError('Las letras deben estar en línea recta.')
+    }
     return
   }
 
@@ -800,7 +803,9 @@ const validarSeleccionAutomatica = (finalizada = false) => {
     [...palabra].reverse().join('').startsWith(seleccion)
   )
 
-  if (seleccion.length > 1 && !esPrefijoPosible) {
+  // Mientras se arrastra, la selección todavía puede convertirse en una
+  // palabra válida. Penalizar solo al soltar evita errores por cada letra.
+  if (finalizada && seleccion.length > 1 && !esPrefijoPosible) {
     registrarError('Palabra incorrecta')
     return
   }
@@ -953,8 +958,6 @@ onUnmounted(() => {
 
     <BackToMenu />
 
-    <h1>Sopa de letras</h1>
-
     <p>
       Selecciona las letras para formar
       una palabra.
@@ -1048,21 +1051,6 @@ onUnmounted(() => {
           </span>
 
         </div>
-
-      </div>
-
-
-      <!-- Palabra actual -->
-
-      <div class="current-word">
-
-        <strong>
-          Palabra:
-        </strong>
-
-        <span>
-          {{ palabraSeleccionada || '---' }}
-        </span>
 
       </div>
 
@@ -1172,23 +1160,6 @@ onUnmounted(() => {
       </div>
 
 
-      <!-- Mensaje -->
-
-      <p
-        v-if="mensaje"
-
-        :class="
-          respuestaCorrecta
-            ? 'correcto'
-            : 'incorrecto'
-        "
-      >
-
-        {{ mensaje }}
-
-      </p>
-
-
       <!-- Pantalla final -->
 
       <div
@@ -1197,7 +1168,7 @@ onUnmounted(() => {
       >
 
         <h2>
-          🎉 ¡Juego terminado!
+          ¡Juego terminado!
         </h2>
 
         <p>
@@ -1212,7 +1183,7 @@ onUnmounted(() => {
             {{ aciertos }}
           </p>
 
-          <p>
+          <p class="error-stat">
             <strong>Errores:</strong>
             {{ errores }}
           </p>
@@ -1230,14 +1201,20 @@ onUnmounted(() => {
         </div>
 
 
-        <button
-          class="restart-button"
-          @click="reiniciarJuego"
-        >
-
-          Jugar nuevamente
-
-        </button>
+        <div class="final-actions">
+          <button
+            class="restart-button"
+            @click="reiniciarJuego"
+          >
+            Volver a jugar
+          </button>
+          <button
+            class="menu-button"
+            @click="router.push('/home')"
+          >
+            Menú principal
+          </button>
+        </div>
 
       </div>
 
@@ -1470,8 +1447,7 @@ onUnmounted(() => {
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    transform 0.15s ease;
+    box-shadow 0.15s ease;
 
   font-size: 18px;
 
@@ -1501,8 +1477,6 @@ onUnmounted(() => {
   color: #312e81;
 
   box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.22), 0 4px 10px rgba(49, 46, 129, 0.16);
-
-  transform: scale(1.04);
 
 }
 
@@ -1639,4 +1613,27 @@ li {
 
 }
 
+</style>
+
+<style scoped>
+.game-over { position: fixed; z-index: 1100; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(560px,calc(100vw - 32px)); padding: 34px; border: 1px solid rgba(255,255,255,.8); border-radius: 28px; background: #fff; box-shadow: 0 30px 90px rgba(15,23,42,.4), 0 0 0 100vmax rgba(15,23,42,.42); text-align: center; }
+
+.final-stats { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 24px 0; }
+.final-stats p { display: grid; gap: 4px; margin: 0; padding: 14px 10px; border-radius: 16px; background: #f1f5f9; }
+@media(max-width:560px){.game-over{padding:24px 18px}.final-stats{gap:8px}}
+</style>
+
+<style scoped>
+.game-over{background:linear-gradient(135deg,#15803d 0%,#22c55e 48%,#16a34a 100%);background-size:180% 180%;color:#fff;border-color:rgba(255,255,255,.65);animation:resultado-brillo 4s ease-in-out infinite,resultado-entrada .3s ease-out}
+.game-over h2,.game-over p,.game-over strong{color:#fff}
+.final-stats p{background:rgba(255,255,255,.17)}
+.final-stats .error-stat{background:rgba(255,255,255,.17)}
+.final-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.final-actions button{margin:0;padding:12px 24px;border:0;border-radius:8px;font-weight:700;cursor:pointer}
+.menu-button{background:rgba(255,255,255,.95);color:#166534}
+.menu-button:hover{background:#dcfce7}
+@media(max-width:480px){.final-actions{flex-direction:column}.final-actions button{width:100%}}
+@keyframes resultado-brillo{0%,100%{background-position:0% 50%;box-shadow:0 30px 90px rgba(15,23,42,.4),0 0 0 100vmax rgba(15,23,42,.42),0 0 18px rgba(34,197,94,.2)}50%{background-position:100% 50%;box-shadow:0 30px 90px rgba(15,23,42,.4),0 0 0 100vmax rgba(15,23,42,.42),0 0 34px rgba(34,197,94,.55)}}
+@keyframes resultado-entrada{from{opacity:0;transform:translate(-50%,-47%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@media(prefers-reduced-motion:reduce){.game-over{animation:none;background-position:50% 50%}}
 </style>

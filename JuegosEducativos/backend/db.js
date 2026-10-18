@@ -8,8 +8,10 @@ const conexion = mysql.createPool({
 })
 
 async function probarConexion() {
+  let conexionBD
+
   try {
-    const conexionBD = await conexion.getConnection()
+    conexionBD = await conexion.getConnection()
 
     await conexionBD.query(`
       CREATE TABLE IF NOT EXISTS palabras_crucigrama (
@@ -24,15 +26,44 @@ async function probarConexion() {
       )
     `)
 
+    await conexionBD.query(`
+      CREATE TABLE IF NOT EXISTS unidades (
+        id_unidad INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL UNIQUE,
+        fecha_creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
+    const [columnasJuego] = await conexionBD.query(
+      "SHOW COLUMNS FROM juegos LIKE 'id_unidad'"
+    )
+
+    if (columnasJuego.length === 0) {
+      await conexionBD.query(
+        'ALTER TABLE juegos ADD COLUMN id_unidad INT NULL AFTER id_tipo'
+      )
+    }
+
+    const [indicesJuego] = await conexionBD.query(
+      "SHOW INDEX FROM juegos WHERE Key_name = 'idx_juegos_unidad'"
+    )
+
+    if (indicesJuego.length === 0) {
+      await conexionBD.query(
+        'CREATE INDEX idx_juegos_unidad ON juegos (id_unidad)'
+      )
+    }
+
     console.log('✅ Conectado correctamente a MySQL')
 
-    conexionBD.release()
   } catch (error) {
     console.error('❌ Error al conectar con MySQL:')
     console.error(error.message)
+  } finally {
+    if (conexionBD) conexionBD.release()
   }
 }
 
-probarConexion()
+conexion.preparacion = probarConexion()
 
 module.exports = conexion

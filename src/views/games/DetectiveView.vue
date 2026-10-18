@@ -356,13 +356,30 @@
 
     </div>
 
+    <div v-if="resultadoGuardado && !showModal" class="completion-overlay">
+      <section class="completion-card" role="dialog" aria-modal="true" aria-label="Resultados de Detective Escolar">
+        <div class="completion-icon">??</div>
+        <h2>¡Caso resuelto!</h2>
+        <p class="completion-copy">Terminaste todos los enigmas.</p>
+        <div class="completion-stats">
+          <div><strong>{{ totalScore }}</strong><span>Puntos</span></div>
+          <div><strong>{{ formattedTime }}</strong><span>Tiempo</span></div>
+          <div><strong>{{ hits }}</strong><span>Aciertos</span></div>
+          <div><strong>{{ errors }}</strong><span>Errores</span></div>
+        </div>
+        <div class="completion-actions">
+          <button class="completion-primary" @click="resetCurrentGame">?? Jugar otra vez</button>
+          <button class="completion-secondary" @click="$router.push('/home')">¦ Volver al inicio</button>
+        </div>
+      </section>
+    </div>
     <!-- MODAL FEEDBACK -->
     <div
       v-if="showModal"
       class="modal-overlay"
     >
 
-      <div class="modal-card">
+      <div class="modal-card" :class="modalSuccess ? 'feedback-success' : 'feedback-error'">
 
         <div
           :class="[
@@ -1776,4 +1793,27 @@ onUnmounted(() => {
 
 }
 
+</style>
+
+<style scoped>
+.completion-overlay{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;padding:18px;background:rgba(15,23,42,.42);backdrop-filter:blur(8px)}
+.completion-card{width:min(560px,100%);padding:34px;border:1px solid rgba(255,255,255,.8);border-radius:28px;background:#fff;box-shadow:0 30px 90px rgba(15,23,42,.4);text-align:center;animation:completion-in .25s ease-out}
+.completion-icon{display:grid;width:72px;height:72px;margin:0 auto 14px;place-items:center;border-radius:50%;background:#fef3c7;font-size:40px}
+.completion-card h2{margin:0;color:#172033;font-size:clamp(30px,7vw,42px)}
+.completion-copy{margin:10px 0 24px;color:#64748b}
+.completion-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.completion-stats div{display:grid;gap:4px;padding:14px 10px;border-radius:16px;background:#f1f5f9}
+.completion-stats strong{color:#312e81;font-size:22px}.completion-stats span{color:#64748b;font-size:13px}
+.completion-actions{display:grid;gap:10px;margin-top:22px}
+.completion-actions button{padding:13px;border:0;border-radius:12px;font-weight:700;cursor:pointer}
+.completion-primary{background:#4f46e5;color:#fff}.completion-secondary{background:#e2e8f0;color:#334155}
+@keyframes completion-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:500px){.completion-card{padding:24px 18px}}
+</style><style scoped>
+.feedback-success{background:#16a34a;color:#fff}.feedback-error{background:#dc2626;color:#fff}
+.feedback-success h3,.feedback-success p,.feedback-error h3,.feedback-error p{color:#fff}
+.feedback-success .modal-icon.success,.feedback-error .modal-icon.error{background:rgba(255,255,255,.2);color:#fff}
+.completion-card{background:#16a34a;color:#fff;border-color:rgba(255,255,255,.55)}
+.completion-card h2,.completion-card .completion-copy,.completion-card .completion-stats strong,.completion-card .completion-stats span{color:#fff}
+.completion-card .completion-icon,.completion-card .completion-stats div{background:rgba(255,255,255,.17)}
 </style>

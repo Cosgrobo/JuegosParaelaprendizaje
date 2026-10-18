@@ -137,6 +137,7 @@ onMounted(() => {
               :title="juego.nombre"
               :description="juego.descripcion"
               :icon="obtenerIcono(juego.tipo)"
+              :unit="juego.unidad"
               :route="
                 juego.tipo === 'Sopa de letras'
                   ? `/juegos/sopa/${juego.id_juego}`
