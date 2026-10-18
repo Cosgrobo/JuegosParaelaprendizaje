@@ -314,6 +314,14 @@ function cerrarSesion() {
 
           </div>
 
+          <button
+            class="logout-button"
+            type="button"
+            @click="cerrarSesion"
+          >
+            Cerrar sesión
+          </button>
+
         </div>
 
         <div class="divider"></div>
@@ -526,16 +534,6 @@ function cerrarSesion() {
 
         </section>
 
-
-        <!-- CERRAR SESIÓN -->
-
-        <button
-          class="logout-button"
-          type="button"
-          @click="cerrarSesion"
-        >
-          Cerrar sesión
-        </button>
 
       </section>
 
@@ -890,8 +888,9 @@ h2 {
 }
 
 .logout-button {
-  display: block;
-  margin: 28px auto 0;
+  margin-left: auto;
+  align-self: flex-start;
+  flex: 0 0 auto;
   padding: 11px 17px;
   border: 1px solid #fed7aa;
   border-radius: 13px;
@@ -917,6 +916,14 @@ h2 {
 
   .profile-card {
     padding: 25px 20px;
+  }
+
+  .profile-heading {
+    flex-wrap: wrap;
+  }
+
+  .logout-button {
+    margin-left: auto;
   }
 
   .profile-heading {
