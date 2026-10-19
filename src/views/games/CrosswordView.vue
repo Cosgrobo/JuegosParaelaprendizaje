@@ -1124,7 +1124,7 @@ onUnmounted(() => {
 
     <header class="game-header">
 
-      <h1>✏️ Crucigrama</h1>
+      <h1> Crucigrama</h1>
 
       <p>
         Completa las palabras utilizando
@@ -1332,7 +1332,7 @@ onUnmounted(() => {
 
     <section class="clues">
 
-      <h2>📚 Pistas</h2>
+      <h2> Pistas</h2>
 
 
       <div

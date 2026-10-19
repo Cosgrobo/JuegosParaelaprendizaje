@@ -290,7 +290,7 @@ const comprobarRespuesta = () => {
     puntuacion.value += 100
 
     mensaje.value =
-      '✅ ¡Respuesta correcta! +100 puntos'
+      ' ¡Respuesta correcta! +100 puntos'
 
   } else {
     errores.value++
@@ -304,7 +304,7 @@ const comprobarRespuesta = () => {
       ]
 
     mensaje.value =
-      `❌ Respuesta incorrecta. La respuesta correcta era: ${correcta}`
+      ` Respuesta incorrecta. La respuesta correcta era: ${correcta}`
   }
 
   if (respondidas.value >= preguntas.value.length) {
@@ -597,7 +597,7 @@ onUnmounted(() => {
           class="otra"
           @click="girarOtraVez"
         >
-          🎡 Girar otra vez
+           Girar otra vez
         </button>
 
           </section>
@@ -636,7 +636,7 @@ onUnmounted(() => {
 
             <div class="resultado-acciones">
               <button type="button" class="resultado-continuar" @click="girarOtraVez">
-                🎡 Girar otra vez
+                 Girar otra vez
               </button>
               <button type="button" class="resultado-cerrar" @click="mostrarResultado = false">
                 Ver pregunta
@@ -651,7 +651,7 @@ onUnmounted(() => {
           :disabled="girando || juegoTerminado"
           @click="girarRuleta"
         >
-          {{ girando ? 'Girando...' : juegoTerminado ? 'Partida terminada' : '🎡 Girar ruleta' }}
+          {{ girando ? 'Girando...' : juegoTerminado ? 'Partida terminada' : ' Girar ruleta' }}
         </button>
 
       </section>

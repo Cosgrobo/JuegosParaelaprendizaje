@@ -4,7 +4,7 @@
 <BackToMenu />
     <div v-if="resultadoGuardado" class="completion-overlay">
       <section class="completion-card" role="dialog" aria-modal="true" aria-label="Resultados de MemoTIC">
-        <div class="completion-icon">🏆</div>
+        <div class="completion-icon"></div>
         <h2>¡Memorama completado!</h2>
         <p class="completion-copy">Encontraste todas las parejas.</p>
         <div class="completion-stats">
@@ -14,15 +14,15 @@
           <div><strong>{{ intentos }}</strong><span>Intentos</span></div>
         </div>
         <div class="completion-actions">
-          <button class="completion-primary" @click="reiniciarJuego">🔄 Jugar otra vez</button>
-          <button class="completion-secondary" @click="router.push('/home')">⌂ Volver al inicio</button>
+          <button class="completion-primary" @click="reiniciarJuego"> Jugar otra vez</button>
+          <button class="completion-secondary" @click="router.push('/home')"> Volver al inicio</button>
         </div>
       </section>
     </div>
     <!-- BARRA SUPERIOR Y CONMUTADOR DE ROL -->
     <header class="memory-header">
       <div class="brand">
-        <span class="icon">🧠</span>
+        <span class="icon"></span>
         <span class="title">MemoTIC</span>
       </div>
 
@@ -31,7 +31,7 @@
 
     <!-- TÍTULO PRINCIPAL -->
     <div class="hero">
-      <h1>🧠 MemoTIC - Memorama Educativo</h1>
+      <h1> MemoTIC - Memorama Educativo</h1>
 
       <p>
         Encuentra las parejas asociando cada concepto de TICs
@@ -128,7 +128,7 @@
                 <div class="interior">
 
                   <div class="frente">
-                    ❓
+                    
                   </div>
 
                   <div
@@ -175,7 +175,7 @@
         @click="reiniciarJuego"
         class="btn-secondary"
       >
-        🔄 Nuevo Juego
+         Nuevo Juego
       </button>
 
     </div>
@@ -645,7 +645,7 @@ const comprobarPareja = () => {
 
 
     mensajeEstado.value =
-      'No coinciden. Intenta de nuevo. 🤔'
+      'No coinciden. Intenta de nuevo. '
 
 
     setTimeout(() => {

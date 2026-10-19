@@ -1,378 +1,1702 @@
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import {
+  computed,
+  ref,
+  onMounted
+} from 'vue'
+
 import GameCard from '../components/GameCard.vue'
+import AppIcon from '../components/AppIcon.vue'
+
 
 const juegos = ref([])
 const cargando = ref(true)
 const mensaje = ref('')
+
+
 const iconosPorTipo = {
-  'Sopa de letras': '\u{1F50D}',
-  Crucigrama: '\u{1F9E9}',
-  Ruleta: '\u{1F3A1}',
-  Memorama: '\u{1F9E0}',
-  Quiz: '\u{2753}',
-  Preguntas: '\u{2753}',
-  Detective: '\u{1F575}\u{FE0F}'
+  'Sopa de letras': 'search',
+  Crucigrama: 'grid',
+  Ruleta: 'wheel',
+  Memorama: 'cards',
+  Quiz: 'question',
+  Preguntas: 'question',
+  Detective: 'detective'
 }
 
-const obtenerIcono = (tipo) => iconosPorTipo[tipo] || '\u{1F3AE}'
+
+const obtenerIcono = (tipo) => {
+  return iconosPorTipo[tipo] || 'controller'
+}
+
+
 const definicionCategorias = [
-  { id: 'palabras', titulo: 'Palabras y letras', tipos: ['Sopa de letras', 'Crucigrama'] },
-  { id: 'observacion', titulo: 'Memoria y observación', tipos: ['Memorama', 'Detective'] },
-  { id: 'retos', titulo: 'Preguntas y azar', tipos: ['Quiz', 'Preguntas', 'Ruleta'] }
+  {
+    id: 'palabras',
+
+    titulo: 'Palabras y letras',
+
+    descripcion:
+      'Sopas de letras, crucigramas y actividades de vocabulario.',
+
+    tipos: [
+      'Sopa de letras',
+      'Crucigrama'
+    ]
+  },
+
+  {
+    id: 'observacion',
+
+    titulo: 'Memoria y observación',
+
+    descripcion:
+      'Entrena memoria, atención y capacidad de deducción.',
+
+    tipos: [
+      'Memorama',
+      'Detective'
+    ]
+  },
+
+  {
+    id: 'retos',
+
+    titulo: 'Preguntas y azar',
+
+    descripcion:
+      'Responde preguntas y pon a prueba tus conocimientos.',
+
+    tipos: [
+      'Quiz',
+      'Preguntas',
+      'Ruleta'
+    ]
+  }
 ]
+
+
 const carruseles = ref({})
 
-const categorias = computed(() => {
-  const agrupadas = definicionCategorias.map((categoria) => ({
-    ...categoria,
-    juegos: juegos.value.filter((juego) => categoria.tipos.includes(juego.tipo))
-  })).filter((categoria) => categoria.juegos.length)
 
-  const tiposConCategoria = definicionCategorias.flatMap((categoria) => categoria.tipos)
-  const otros = juegos.value.filter((juego) => !tiposConCategoria.includes(juego.tipo))
-  if (otros.length) agrupadas.push({ id: 'otros', titulo: 'Otros juegos', juegos: otros })
+const categorias = computed(() => {
+
+  const agrupadas =
+    definicionCategorias
+      .map((categoria) => ({
+        ...categoria,
+
+        juegos:
+          juegos.value.filter(
+            (juego) =>
+              categoria.tipos.includes(
+                juego.tipo
+              )
+          )
+      }))
+      .filter(
+        (categoria) =>
+          categoria.juegos.length
+      )
+
+
+  const tiposConCategoria =
+    definicionCategorias.flatMap(
+      (categoria) =>
+        categoria.tipos
+    )
+
+
+  const otros =
+    juegos.value.filter(
+      (juego) =>
+        !tiposConCategoria.includes(
+          juego.tipo
+        )
+    )
+
+
+  if (otros.length) {
+    agrupadas.push({
+      id: 'otros',
+      titulo: 'Otros juegos',
+      descripcion: 'Más actividades disponibles.',
+      juegos: otros
+    })
+  }
+
 
   return agrupadas
 })
 
-const desplazarCarrusel = (id, direccion) => {
-  carruseles.value[id]?.scrollBy({ left: direccion * 320, behavior: 'smooth' })
+
+const totalJuegos = computed(
+  () => juegos.value.length
+)
+
+
+const desplazarCarrusel = (
+  id,
+  direccion
+) => {
+
+  carruseles.value[id]
+    ?.scrollBy({
+      left: direccion * 320,
+      behavior: 'smooth'
+    })
 }
+
+
+const rutaJuego = (juego) => {
+
+  if (
+    juego.tipo ===
+    'Sopa de letras'
+  ) {
+    return `/juegos/sopa/${juego.id_juego}`
+  }
+
+
+  if (
+    juego.tipo ===
+    'Crucigrama'
+  ) {
+    return `/juegos/crucigrama/${juego.id_juego}`
+  }
+
+
+  if (
+    juego.tipo ===
+    'Ruleta'
+  ) {
+    return `/juegos/ruleta/${juego.id_juego}`
+  }
+
+
+  if (
+    juego.tipo ===
+    'Memorama'
+  ) {
+    return `/juegos/memorama/${juego.id_juego}`
+  }
+
+
+  if (
+    [
+      'Quiz',
+      'Preguntas'
+    ].includes(
+      juego.tipo
+    )
+  ) {
+    return `/juegos/preguntas/${juego.id_juego}`
+  }
+
+
+  if (
+    juego.tipo ===
+    'Detective'
+  ) {
+    return `/juegos/detective/${juego.id_juego}`
+  }
+
+
+  return '#'
+}
+
 
 const obtenerJuegos = async () => {
+
   try {
-    const respuesta = await fetch('http://localhost:3000/api/juegos')
+
+    const respuesta =
+      await fetch(
+        'http://localhost:3000/api/juegos'
+      )
+
 
     if (!respuesta.ok) {
-      throw new Error('No se pudieron obtener los juegos')
+
+      throw new Error(
+        'No se pudieron obtener los juegos'
+      )
+
     }
 
-    juegos.value = await respuesta.json()
+
+    juegos.value =
+      await respuesta.json()
+
 
   } catch (error) {
+
     console.error(error)
-    mensaje.value = 'No se pudieron cargar los juegos'
+
+    mensaje.value =
+      'No se pudieron cargar los juegos'
+
 
   } finally {
-    cargando.value = false
+
+    cargando.value =
+      false
   }
 }
+
 
 onMounted(() => {
   obtenerJuegos()
 })
 </script>
 
+
 <template>
+
   <div class="home">
 
-    <header class="navbar">
+    <!-- HEADER -->
+
+    <header class="topbar">
+
       <div class="brand">
-      <h1>Juegos Educativos</h1>
-      <p>Plataforma de juegos didácticos</p>
+
+        <div class="brand-symbol">
+
+          <AppIcon
+            name="controller"
+            :size="25"
+          />
+
+        </div>
+
+
+        <div>
+
+          <strong>
+            Juegos Educativos
+          </strong>
+
+          <span>
+            Aprende mientras juegas
+          </span>
+
+        </div>
+
       </div>
-      <nav class="nav-actions" aria-label="Navegación principal">
-        <button class="profile-button" type="button" aria-label="Abrir perfil" @click="$router.push('/perfil')">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-4.14 0-7.5 2.24-7.5 5v2h15v-2c0-2.76-3.36-5-7.5-5Z" /></svg>
+
+
+      <div class="top-actions">
+
+        <button
+          class="create-button top-create"
+          @click="
+            $router.push(
+              '/juegos/crear'
+            )
+          "
+        >
+
+          <span>＋</span>
+
+          Crear juego
+
         </button>
-      </nav>
+
+
+        <button
+          class="profile-button"
+          aria-label="Mi perfil"
+          title="Mi perfil"
+          @click="
+            $router.push(
+              '/perfil'
+            )
+          "
+        >
+
+          <AppIcon
+            name="user"
+            :size="20"
+          />
+
+        </button>
+
+      </div>
+
     </header>
+
 
     <main>
 
-      <div class="home-heading">
-        <h2>Selecciona una actividad</h2>
-        <button class="create-button" @click="$router.push('/juegos/crear')">
-          + Crear juego
-        </button>
-      </div>
-<!-- Cargando -->
-      <p v-if="cargando">
-        Cargando juegos...
-      </p>
+      <!-- PRESENTACIÓN -->
 
-      <!-- Error -->
-      <p v-else-if="mensaje" class="error">
-        {{ mensaje }}
-      </p>
+      <section class="hero">
 
-      <!-- Juegos -->
-    <div v-else class="game-categories">
-      <section
-        v-for="categoria in categorias"
-        :key="categoria.id"
-        class="category-section"
-      >
-        <div class="category-heading">
-          <h3>{{ categoria.titulo }}</h3>
+        <div class="hero-content">
 
-          <div
-            class="carousel-controls"
-            :aria-label="`Controles de ${categoria.titulo}`"
-          >
+          <span class="eyebrow">
+            PLATAFORMA INTERACTIVA
+          </span>
+
+
+          <h1>
+            ¿Qué quieres
+            practicar hoy?
+          </h1>
+
+
+          <p>
+            Elige una actividad,
+            juega y aprende
+            a tu propio ritmo.
+          </p>
+
+
+          <div class="hero-footer">
+
+            <div class="hero-stat">
+
+              <strong>
+                {{ totalJuegos }}
+              </strong>
+
+              <span>
+                juegos disponibles
+              </span>
+
+            </div>
+
+
+            <div class="hero-stat">
+
+              <strong>
+                {{ categorias.length }}
+              </strong>
+
+              <span>
+                categorías
+              </span>
+
+            </div>
+
+
             <button
-              type="button"
-              :aria-label="`Anterior: ${categoria.titulo}`"
-              @click="desplazarCarrusel(categoria.id, -1)"
+              class="create-button hero-create"
+              @click="
+                $router.push(
+                  '/juegos/crear'
+                )
+              "
             >
-              ‹
+
+              ＋ Crear juego
+
             </button>
 
-            <button
-              type="button"
-              :aria-label="`Siguiente: ${categoria.titulo}`"
-              @click="desplazarCarrusel(categoria.id, 1)"
-            >
-              ›
-            </button>
           </div>
+
         </div>
 
-          <div :ref="(element) => { if (element) carruseles[categoria.id] = element }" class="games-carousel">
-            <GameCard
-              v-for="juego in categoria.juegos"
-              :key="juego.id_juego"
-              :id="juego.id_juego"
-              :title="juego.nombre"
-              :description="juego.descripcion"
-              :icon="obtenerIcono(juego.tipo)"
-              :unit="juego.unidad"
-              :route="
-                juego.tipo === 'Sopa de letras'
-                  ? `/juegos/sopa/${juego.id_juego}`
-                  : juego.tipo === 'Crucigrama'
-                    ? `/juegos/crucigrama/${juego.id_juego}`
-                    : juego.tipo === 'Ruleta'
-                      ? `/juegos/ruleta/${juego.id_juego}`
-                      : juego.tipo === 'Memorama'
-                        ? `/juegos/memorama/${juego.id_juego}`
-                        : ['Quiz', 'Preguntas'].includes(juego.tipo)
-                          ? `/juegos/preguntas/${juego.id_juego}`
-                          : juego.tipo === 'Detective'
-                            ? `/juegos/detective/${juego.id_juego}`
-                            : '#'
+      </section>
+
+
+      <div
+        v-if="cargando"
+        class="status-card"
+      >
+        Cargando juegos...
+      </div>
+
+
+      <div
+        v-else-if="mensaje"
+        class="status-card error"
+      >
+        {{ mensaje }}
+      </div>
+
+
+      <!-- CATEGORÍAS -->
+
+      <div
+        v-else
+        class="categories"
+      >
+
+        <section
+          v-for="
+            categoria
+            in categorias
+          "
+          :key="
+            categoria.id
+          "
+          class="category"
+        >
+
+          <header
+            class="category-header"
+          >
+
+            <div>
+
+              <div
+                class="category-title"
+              >
+
+                <span
+                  class="category-line"
+                ></span>
+
+
+                <h2>
+                  {{ categoria.titulo }}
+                </h2>
+
+
+                <span
+                  class="count"
+                >
+                  {{
+                    categoria
+                      .juegos
+                      .length
+                  }}
+                </span>
+
+              </div>
+
+
+              <p>
+                {{
+                  categoria.descripcion
+                }}
+              </p>
+
+            </div>
+
+
+            <div
+              class="carousel-buttons"
+            >
+
+              <button
+                type="button"
+                aria-label="Anterior"
+                @click="
+                  desplazarCarrusel(
+                    categoria.id,
+                    -1
+                  )
+                "
+              >
+                ‹
+              </button>
+
+
+              <button
+                type="button"
+                aria-label="Siguiente"
+                @click="
+                  desplazarCarrusel(
+                    categoria.id,
+                    1
+                  )
+                "
+              >
+                ›
+              </button>
+
+            </div>
+
+          </header>
+
+
+          <div class="carousel-window">
+
+            <div
+              :ref="
+                (element) => {
+
+                  if (element) {
+
+                    carruseles[
+                      categoria.id
+                    ] = element
+
+                  }
+
+                }
               "
-            />
+              class="carousel"
+            >
+
+              <GameCard
+                v-for="
+                  juego
+                  in categoria.juegos
+                "
+
+                :key="
+                  juego.id_juego
+                "
+
+                :id="
+                  juego.id_juego
+                "
+
+                :title="
+                  juego.nombre
+                "
+
+                :description="
+                  juego.descripcion
+                "
+
+                :icon="
+                  obtenerIcono(
+                    juego.tipo
+                  )
+                "
+
+                :unit="
+                  juego.unidad
+                "
+
+                :kind="
+                  juego.tipo
+                "
+
+                :route="
+                  rutaJuego(juego)
+                "
+              />
+
+            </div>
+
           </div>
+
         </section>
+
       </div>
 
     </main>
 
   </div>
+
 </template>
 
-<style scoped>
 
+<style scoped>
 .home {
   min-height: 100vh;
-  padding: 0 40px 40px;
+
+  padding:
+    24px 22px 60px;
+
   background:
-    radial-gradient(circle at 88% 24%, rgba(129, 140, 248, 0.16), transparent 26rem),
-    linear-gradient(145deg, #f4f6ff 0%, #f8faff 48%, #ecfeff 100%);
+    transparent;
 }
 
-.navbar {
-  min-height: 94px;
+
+/* ==========================================================
+   HEADER LIQUID GLASS
+========================================================== */
+
+.topbar {
+  position: sticky;
+
+  top: 14px;
+
+  z-index: 20;
+
+  width:
+    min(1180px, 100%);
+
+  min-height: 70px;
+
+  margin:
+    0 auto 28px;
+
+  padding:
+    12px 15px 12px 17px;
+
   display: flex;
+
   align-items: center;
+
   justify-content: space-between;
-  gap: 24px;
-  margin: 0 -40px 40px;
-  padding: 14px 40px;
-  background: linear-gradient(105deg, #312e81 0%, #4f46e5 62%, #6366f1 100%);
-  box-shadow: 0 8px 24px rgba(49, 46, 129, 0.22);
+
+  gap: 20px;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.38
+    );
+
+  border-radius:
+    24px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(
+        29,
+        53,
+        72,
+        0.82
+      ),
+      rgba(
+        41,
+        76,
+        96,
+        0.74
+      ),
+      rgba(
+        62,
+        105,
+        122,
+        0.62
+      )
+    );
+
+  box-shadow:
+    0 18px 40px
+    rgba(
+      15,
+      23,
+      42,
+      0.14
+    ),
+
+    inset
+    0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.25
+    ),
+
+    inset
+    0 -1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.08
+    );
+
+  backdrop-filter:
+    blur(20px)
+    saturate(125%);
+
+  -webkit-backdrop-filter:
+    blur(20px)
+    saturate(125%);
 }
 
-.brand h1 {
-  margin: 0 0 5px;
-  color: #fff;
-  letter-spacing: -0.03em;
-}
 
-.brand p {
-  margin: 0;
-  color: #e0e7ff;
-}
-
-.nav-actions {
+.brand {
   display: flex;
+
   align-items: center;
+
+  gap: 12px;
 }
 
-.profile-button {
+
+.brand-symbol {
+  width: 46px;
+
+  height: 46px;
+
   display: grid;
-  width: 44px;
-  height: 44px;
+
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  backdrop-filter: blur(8px);
-  cursor: pointer;
+
+  border-radius: 15px;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.30
+    );
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.10
+    );
+
+  color: white;
+
+  box-shadow:
+    inset
+    0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.15
+    );
 }
 
-.profile-button svg {
-  width: 23px;
-  height: 23px;
-  fill: currentColor;
-}
 
-.profile-button:hover {
-  background: rgba(255, 255, 255, 0.26);
+.brand strong,
+.brand span {
+  display: block;
 }
 
 
-main {
-  max-width: 1100px;
-  margin: 0 auto;
+.brand strong {
+  color: white;
+
+  font-size: 16px;
 }
 
-.home-heading {
+
+.brand span {
+  margin-top: 3px;
+
+  color:
+    rgba(
+      226,
+      232,
+      240,
+      0.90
+    );
+
+  font-size: 13px;
+}
+
+
+.top-actions {
   display: flex;
+
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 25px;
+
+  gap: 10px;
 }
 
-main h2 {
-  margin: 0;
-  color: #1e1b4b;
-  font-size: 28px;
-  letter-spacing: -0.03em;
-}
 
 .create-button {
-  padding: 11px 16px;
-  border: 1px solid rgba(79, 70, 229, 0.24);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.48);
-  color: #3730a3;
-  font-size: 15px;
-  font-weight: 700;
-  box-shadow: 0 6px 18px rgba(49, 46, 129, 0.08);
-  backdrop-filter: blur(10px);
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.28
+    );
+
+  border-radius: 14px;
+
+  font-weight: 800;
+
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+
+  transition:
+    transform
+    0.16s ease,
+    background
+    0.16s ease;
 }
 
-.create-button:hover {
-  transform: translateY(-1px);
-  border-color: rgba(79, 70, 229, 0.45);
-  background: rgba(255, 255, 255, 0.72);
+
+.top-create {
+  padding:
+    11px 15px;
+
+  color: white;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.10
+    );
 }
 
 
-.game-categories {
+.top-create:hover {
+  transform:
+    translateY(-1px);
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.18
+    );
+}
+
+
+.profile-button {
+  width: 44px;
+
+  height: 44px;
+
   display: grid;
-  gap: 30px;
+
+  place-items: center;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.28
+    );
+
+  border-radius: 14px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.10
+    );
+
+  color: white;
+
+  cursor: pointer;
+
+  box-shadow:
+    inset
+    0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.14
+    );
+
+  transition:
+    background
+    0.16s ease,
+    transform
+    0.16s ease;
 }
 
-.category-section {
+
+.profile-button:hover {
+  transform:
+    translateY(-1px);
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.18
+    );
+}
+
+
+/* ==========================================================
+   MAIN
+========================================================== */
+
+main {
+  width: 100%;
+
+  max-width: 1180px;
+
+  min-width: 0;
+
+  margin:
+    0 auto;
+}
+
+
+main > * {
   min-width: 0;
 }
 
-.category-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
+
+/* ==========================================================
+   HERO
+========================================================== */
+
+.hero {
+  width: 100%;
+
+  margin:
+    0 auto 28px;
+
+  padding:
+    38px 38px 35px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.64
+    );
+
+  border-radius: 31px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        255,
+        255,
+        255,
+        0.72
+      ),
+      rgba(
+        255,
+        255,
+        255,
+        0.50
+      )
+    );
+
+  box-shadow:
+    0 20px 42px
+    rgba(
+      30,
+      41,
+      59,
+      0.07
+    ),
+
+    inset
+    0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.85
+    );
+
+  backdrop-filter:
+    blur(17px)
+    saturate(140%);
+
+  -webkit-backdrop-filter:
+    blur(17px)
+    saturate(140%);
 }
 
-.category-heading h3 {
+
+.hero-content {
+  max-width: 700px;
+}
+
+
+.eyebrow {
+  display: block;
+
+  margin-bottom: 13px;
+
+  color: #52758a;
+
+  font-size: 11px;
+
+  font-weight: 900;
+
+  letter-spacing:
+    0.13em;
+}
+
+
+.hero h1 {
+  max-width: 600px;
+
   margin: 0;
-  color: #312e81;
-  font-size: 21px;
-  letter-spacing: -0.02em;
+
+  color: #172554;
+
+  font-size:
+    clamp(
+      35px,
+      5vw,
+      53px
+    );
+
+  line-height: 1.03;
+
+  letter-spacing:
+    -0.055em;
 }
 
-.carousel-controls {
+
+.hero p {
+  margin:
+    13px 0 0;
+
+  color: #64748b;
+
+  font-size: 16px;
+
+  line-height: 1.6;
+}
+
+
+.hero-footer {
   display: flex;
+
+  align-items: center;
+
+  flex-wrap: wrap;
+
+  gap: 12px;
+
+  margin-top: 26px;
+}
+
+
+.hero-stat {
+  min-width: 140px;
+
+  padding:
+    12px 15px;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.68
+    );
+
+  border-radius: 17px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.54
+    );
+}
+
+
+.hero-stat strong,
+.hero-stat span {
+  display: block;
+}
+
+
+.hero-stat strong {
+  color: #172554;
+
+  font-size: 21px;
+}
+
+
+.hero-stat span {
+  margin-top: 2px;
+
+  color: #64748b;
+
+  font-size: 12px;
+}
+
+
+.hero-create {
+  display: none;
+
+  padding:
+    12px 16px;
+
+  color: white;
+
+  border-color: transparent;
+
+  background:
+    linear-gradient(
+      135deg,
+      #294c60,
+      #3e697a
+    );
+}
+
+
+/* ==========================================================
+   CATEGORÍAS
+========================================================== */
+
+.categories {
+  width: 100%;
+
+  max-width: 1180px;
+
+  min-width: 0;
+
+  margin:
+    0 auto;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 26px;
+}
+
+
+.category {
+  position: relative;
+
+  width: 100%;
+
+  max-width: 1180px;
+
+  min-width: 0;
+
+  margin:
+    0 auto;
+
+  padding:
+    25px 24px 27px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.66
+    );
+
+  border-radius: 29px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        255,
+        255,
+        255,
+        0.68
+      ),
+      rgba(
+        255,
+        255,
+        255,
+        0.48
+      )
+    );
+
+  box-shadow:
+    0 18px 38px
+    rgba(
+      30,
+      41,
+      59,
+      0.06
+    ),
+
+    inset
+    0 1px 0
+    rgba(
+      255,
+      255,
+      255,
+      0.82
+    );
+
+  backdrop-filter:
+    blur(15px)
+    saturate(135%);
+
+  -webkit-backdrop-filter:
+    blur(15px)
+    saturate(135%);
+}
+
+
+.category::before {
+  content: '';
+
+  position: absolute;
+
+  top: 0;
+
+  left: 12%;
+
+  width: 46%;
+
+  height: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(
+        255,
+        255,
+        255,
+        0.95
+      ),
+      transparent
+    );
+
+  pointer-events: none;
+}
+
+
+/* ==========================================================
+   CABECERA CATEGORÍA
+========================================================== */
+
+.category-header {
+  position: relative;
+
+  z-index: 3;
+
+  width: 100%;
+
+  display: flex;
+
+  align-items:
+    flex-start;
+
+  justify-content:
+    space-between;
+
+  gap: 18px;
+
+  margin-bottom: 20px;
+}
+
+
+.category-header > div:first-child {
+  min-width: 0;
+
+  flex: 1;
+}
+
+
+.category-title {
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+}
+
+
+.category-title h2 {
+  margin: 0;
+
+  color: #1e293b;
+
+  font-size: 22px;
+
+  letter-spacing:
+    -0.035em;
+}
+
+
+.category-line {
+  width: 4px;
+
+  height: 26px;
+
+  flex-shrink: 0;
+
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #3e697a,
+      #63a8b8
+    );
+}
+
+
+.count {
+  display: grid;
+
+  place-items: center;
+
+  min-width: 27px;
+
+  height: 27px;
+
+  padding:
+    0 8px;
+
+  flex-shrink: 0;
+
+  border-radius: 999px;
+
+  background:
+    #eef5f7;
+
+  color:
+    #365d6e;
+
+  font-size: 12px;
+
+  font-weight: 900;
+}
+
+
+.category-header p {
+  max-width: 650px;
+
+  margin:
+    8px 0 0 14px;
+
+  color: #64748b;
+
+  font-size: 14px;
+
+  line-height: 1.5;
+}
+
+
+/* ==========================================================
+   BOTONES DEL CARRUSEL
+========================================================== */
+
+.carousel-buttons {
+  flex-shrink: 0;
+
+  display: flex;
+
   gap: 8px;
 }
 
-.carousel-controls button {
-  width: 38px;
-  height: 38px;
-  border: 1px solid #c7d2fe;
+
+.carousel-buttons button {
+  width: 40px;
+
+  height: 40px;
+
+  display: grid;
+
+  place-items: center;
+
+  padding: 0;
+
+  border:
+    1px solid
+    rgba(
+      148,
+      163,
+      184,
+      0.20
+    );
+
   border-radius: 13px;
-  background: #fff;
-  color: #4338ca;
-  font-size: 27px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.66
+    );
+
+  color:
+    #475569;
+
+  font-size: 23px;
+
   line-height: 1;
+
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+
+  box-shadow:
+    0 6px 14px
+    rgba(
+      30,
+      41,
+      59,
+      0.04
+    );
+
+  backdrop-filter:
+    blur(10px);
+
+  -webkit-backdrop-filter:
+    blur(10px);
+
+  transition:
+    transform
+    0.16s ease,
+    background
+    0.16s ease,
+    color
+    0.16s ease,
+    border-color
+    0.16s ease;
 }
 
-.carousel-controls button:hover {
-  transform: translateY(-1px);
-  background: #eef2ff;
+
+.carousel-buttons button:hover {
+  transform:
+    translateY(-2px);
+
+  color:
+    #365d6e;
+
+  border-color:
+    rgba(
+      62,
+      105,
+      122,
+      0.30
+    );
+
+  background:
+    #f4f8fa;
 }
 
-.games-carousel {
-  display: flex;
+
+/* ==========================================================
+   VENTANA DEL CARRUSEL
+========================================================== */
+
+.carousel-window {
+  position: relative;
+
+  width: 100%;
+
+  max-width: 100%;
+
+  min-width: 0;
+
+  overflow: hidden;
+
+  border-radius: 22px;
+}
+
+
+.carousel-window::after {
+  content: '';
+
+  position: absolute;
+
+  z-index: 5;
+
+  top: 0;
+
+  right: 0;
+
+  bottom: 0;
+
+  width: 35px;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(
+        248,
+        250,
+        255,
+        0.75
+      )
+    );
+}
+
+
+/* ==========================================================
+   CARRUSEL
+========================================================== */
+
+.carousel {
+  width: 100%;
+
+  max-width: 100%;
+
+  min-width: 0;
+
+  display: grid;
+
+  grid-auto-flow: column;
+
+  grid-auto-columns: 285px;
+
   gap: 18px;
+
   overflow-x: auto;
-  padding: 4px 4px 18px;
-  scroll-snap-type: x mandatory;
-  scrollbar-color: #a5b4fc transparent;
-  scrollbar-width: thin;
+
+  overflow-y: hidden;
+
+  padding:
+    5px 3px 12px;
+
+  scroll-behavior: smooth;
+
+  scroll-snap-type:
+    x proximity;
+
+  scrollbar-width: none;
+
+  overscroll-behavior-inline:
+    contain;
 }
 
-.games-carousel :deep(.game-card) {
-  flex: 0 0 290px;
-  scroll-snap-align: start;
+
+.carousel > * {
+  min-width: 0;
+
+  scroll-snap-align:
+    start;
 }
 
-.error {
-  color: #dc2626;
+
+.carousel::-webkit-scrollbar {
+  display: none;
 }
 
-@media (max-width: 600px) {
+
+/* ==========================================================
+   ESTADOS
+========================================================== */
+
+.status-card {
+  padding: 20px;
+
+  border-radius: 20px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.62
+    );
+
+  text-align: center;
+}
+
+
+.status-card.error {
+  color: #b91c1c;
+}
+
+
+/* ==========================================================
+   RESPONSIVE
+========================================================== */
+
+@media (max-width: 760px) {
+
   .home {
-    padding: 0 18px 28px;
+    padding:
+      14px 12px 40px;
   }
 
-  .navbar {
-    margin: 0 -18px 30px;
-    padding: 14px 18px;
+
+  .topbar {
+    top: 8px;
+
+    margin-bottom: 18px;
+
+    border-radius: 20px;
   }
 
-  .brand h1 {
-    font-size: 20px;
+
+  .brand span {
+    display: none;
   }
 
-  main h2 {
-    font-size: 23px;
+
+  .top-create {
+    display: none;
   }
 
-  .home-heading {
-    flex-wrap: wrap;
+
+  .hero {
+    padding:
+      26px 22px;
+
+    border-radius: 24px;
   }
 
-  .brand p {
-    font-size: 13px;
+
+  .hero h1 {
+    font-size: 37px;
   }
 
-  
-  .create-button {
-    padding: 10px 12px;
-    font-size: 13px;
-    margin-left: auto;
+
+  .hero-create {
+    display: inline-flex;
   }
 
-  .category-heading h3 {
-    font-size: 18px;
+
+  .categories {
+    gap: 19px;
   }
 
-  .games-carousel :deep(.game-card) {
-    flex-basis: min(290px, 84vw);
+
+  .category {
+    padding:
+      19px 16px 21px;
+
+    border-radius: 23px;
   }
+
+
+  .category-header {
+    gap: 12px;
+  }
+
+
+  .category-title h2 {
+    font-size: 19px;
+  }
+
+
+  .category-header p {
+    margin-left: 0;
+  }
+
+
+  .carousel-buttons {
+    align-self: flex-end;
+  }
+
+
+  .carousel-buttons button {
+    width: 36px;
+
+    height: 36px;
+  }
+
+
+  .carousel {
+    grid-auto-columns:
+      min(
+        260px,
+        82vw
+      );
+
+    gap: 14px;
+  }
+
 }
-
-
 </style>

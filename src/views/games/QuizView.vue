@@ -258,14 +258,14 @@ const regresar = () => {
         </button>
 
         <div>
-          <h1>❓ {{ nombreJuego || 'Quiz TIC' }}</h1>
+          <h1> {{ nombreJuego || 'Quiz TIC' }}</h1>
           <p>
             Pon a prueba tus conocimientos
           </p>
         </div>
 
         <div class="score">
-          ⭐ {{ puntuacion }}
+           {{ puntuacion }}
         </div>
 
       </header>
@@ -283,9 +283,9 @@ const regresar = () => {
         </span>
 
         <span>
-          ✅ {{ aciertos }}
+           {{ aciertos }}
           &nbsp;
-          ❌ {{ errores }}
+           {{ errores }}
         </span>
 
       </section>
@@ -359,14 +359,14 @@ const regresar = () => {
             "
             class="correct-text"
           >
-            🎉 ¡Respuesta correcta! +100 puntos
+             ¡Respuesta correcta! +100 puntos
           </p>
 
           <p
             v-else
             class="incorrect-text"
           >
-            ❌ Respuesta incorrecta
+             Respuesta incorrecta
           </p>
 
 
@@ -402,7 +402,7 @@ const regresar = () => {
       <div class="result-card">
 
         <div class="trophy">
-          🏆
+          
         </div>
 
         <h1>
@@ -478,14 +478,14 @@ const regresar = () => {
             class="restart-button"
             @click="reiniciarJuego"
           >
-            🔄 Jugar otra vez
+             Jugar otra vez
           </button>
 
           <button
             class="home-button"
             @click="regresar"
           >
-            🏠 Volver al inicio
+             Volver al inicio
           </button>
 
         </div>

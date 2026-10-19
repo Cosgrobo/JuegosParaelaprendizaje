@@ -6,14 +6,14 @@
     <!-- BARRA SUPERIOR -->
     <header class="detective-header">
       <div class="brand">
-        <span class="icon">🕵️‍♂️</span>
+        <span class="icon"></span>
         <span class="title">Detective Escolar</span>
       </div>
     </header>
 
     <!-- TÍTULO PRINCIPAL -->
     <div class="hero">
-      <h1>🕵️‍♂️ Detective Escolar</h1>
+      <h1> Detective Escolar</h1>
       <p>
         Deduce el concepto oculto utilizando las pistas antes de agotar tus intentos.
       </p>
@@ -150,7 +150,7 @@
                     : 'empty'
                 ]"
               >
-                ❤️
+                
               </span>
             </div>
 
@@ -210,7 +210,7 @@
             <div class="clue-box active">
 
               <div class="clue-title">
-                🔍 Pista 1
+                 Pista 1
                 (Contextual - 100 Pts)
               </div>
 
@@ -232,7 +232,7 @@
 
               <div class="clue-title">
 
-                {{ clueLevel >= 2 ? '🔑' : '🔒' }}
+                {{ clueLevel >= 2 ? '' : '' }}
 
                 Pista 2
                 (Dato Clave - 60 Pts)
@@ -264,7 +264,7 @@
 
               <div class="clue-title">
 
-                {{ clueLevel >= 3 ? '🔑' : '🔒' }}
+                {{ clueLevel >= 3 ? '' : '' }}
 
                 Pista 3
                 (Muy Reveladora - 30 Pts)
@@ -294,7 +294,7 @@
               :disabled="clueLevel >= 3"
               class="btn-secondary"
             >
-              💡 Pedir otra pista (- Puntuación)
+               Pedir otra pista (- Puntuación)
             </button>
 
           </div>
@@ -351,7 +351,7 @@
         @click="resetCurrentGame"
         class="btn-secondary"
       >
-        🔄 Reiniciar Juego
+         Reiniciar Juego
       </button>
 
     </div>
@@ -359,7 +359,7 @@
     <div v-if="resultadoGuardado && !showModal" class="completion-overlay">
       <section class="completion-card" role="dialog" aria-modal="true" aria-label="Resultados de Detective Escolar">
         <div class="completion-icon">??</div>
-        <h2>�Caso resuelto!</h2>
+        <h2>Caso resuelto!</h2>
         <p class="completion-copy">Terminaste todos los enigmas.</p>
         <div class="completion-stats">
           <div><strong>{{ totalScore }}</strong><span>Puntos</span></div>
@@ -369,7 +369,7 @@
         </div>
         <div class="completion-actions">
           <button class="completion-primary" @click="resetCurrentGame">?? Jugar otra vez</button>
-          <button class="completion-secondary" @click="$router.push('/home')">� Volver al inicio</button>
+          <button class="completion-secondary" @click="$router.push('/home')">� Volver al inicio</button>
         </div>
       </section>
     </div>
