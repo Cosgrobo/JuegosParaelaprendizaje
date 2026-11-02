@@ -8,6 +8,7 @@ const props = defineProps({
   description: String,
   icon: String,
   route: String,
+  multiplayerRoute: String,
   unit: String,
 
   kind: {
@@ -229,15 +230,18 @@ const desactivarJuego = async () => {
         class="play-button"
         @click="$router.push(route)"
       >
+        <span class="play-arrow">▶</span>
+        <span>Jugar individual</span>
+      </button>
 
-        <span class="play-arrow">
-          ▶
-        </span>
-
-        <span>
-          Jugar
-        </span>
-
+      <button
+        v-if="multiplayerRoute"
+        type="button"
+        class="multiplayer-button"
+        @click="$router.push(multiplayerRoute)"
+      >
+        <span aria-hidden="true">♧</span>
+        <span>Jugar multijugador</span>
       </button>
 
     </div>
@@ -691,6 +695,30 @@ const desactivarJuego = async () => {
 
 .game-actions {
   margin-top: 22px;
+  display: grid;
+  gap: 9px;
+}
+
+.multiplayer-button {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 11px 16px;
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 15px;
+  background: rgba(238, 242, 255, 0.78);
+  color: #4338ca;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.multiplayer-button:hover {
+  transform: translateY(-1px);
+  background: #e0e7ff;
 }
 
 

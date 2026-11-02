@@ -19,6 +19,25 @@
       </p>
     </div>
 
+    <section v-if="multijugador" class="multiplayer-panel">
+      <div class="multiplayer-status">
+        <strong>{{ turnoDetective === idUsuario ? '¡Es tu turno!' : `Turno de ${nombreTurno}` }}</strong>
+        <span>{{ estadoConexion }}</span>
+      </div>
+      <div class="multiplayer-turn-timer" :class="{ 'timer-warning': turnoSegundosRestantes <= 5 }">
+        <span>Tiempo del turno</span>
+        <strong>{{ turnoSegundosRestantes }} s</strong>
+      </div>
+      <div class="multiplayer-scoreboard">
+        <div v-for="jugador in jugadoresDetective" :key="jugador.id_usuario" class="multiplayer-player"
+             :class="{ 'current-player': jugador.id_usuario === turnoDetective }">
+          <strong>{{ jugador.nombre }}</strong>
+          <span>{{ jugador.puntuacion }} pts</span>
+          <small>{{ jugador.aciertos }} aciertos · {{ jugador.errores }} errores</small>
+        </div>
+      </div>
+    </section>
+
     <!-- PANEL DE MÉTRICAS -->
     <div class="metrics-grid">
 
@@ -65,7 +84,7 @@
       <!-- SELECCIÓN Y NAVEGACIÓN -->
       <div class="filter-bar">
 
-        <div class="filter-group">
+        <div v-if="!multijugador" class="filter-group">
           <label>Materia:</label>
 
           <select
@@ -94,6 +113,7 @@
           </span>
 
           <button
+            v-if="!multijugador"
             @click="prevCase"
             :disabled="currentCaseIndex === 0"
             class="btn-icon"
@@ -102,6 +122,7 @@
           </button>
 
           <button
+            v-if="!multijugador"
             @click="nextCase"
             :disabled="
               currentCaseIndex >= filteredEnigmas.length - 1
@@ -291,7 +312,7 @@
 
             <button
               @click="requestMoreClue"
-              :disabled="clueLevel >= 3"
+              :disabled="clueLevel >= 3 || (multijugador && (turnoDetective !== idUsuario || turnoSegundosRestantes <= 0))"
               class="btn-secondary"
             >
                Pedir otra pista (- Puntuación)
@@ -313,6 +334,7 @@
 
               <input
                 v-model="deductionInput"
+                :disabled="multijugador && (turnoDetective !== idUsuario || turnoSegundosRestantes <= 0)"
                 id="deduction"
                 type="text"
                 placeholder="Ej. Fotosintesis, ADN, Teorema de Pitagoras..."
@@ -321,6 +343,7 @@
 
               <button
                 type="submit"
+                :disabled="multijugador && (turnoDetective !== idUsuario || turnoSegundosRestantes <= 0)"
                 class="btn-primary"
               >
                 Comprobar
@@ -348,6 +371,7 @@
     <div class="footer-actions">
 
       <button
+        v-if="!multijugador"
         @click="resetCurrentGame"
         class="btn-secondary"
       >
@@ -368,7 +392,7 @@
           <div><strong>{{ errors }}</strong><span>Errores</span></div>
         </div>
         <div class="completion-actions">
-          <button class="completion-primary" @click="resetCurrentGame">?? Jugar otra vez</button>
+          <button v-if="!multijugador" class="completion-primary" @click="resetCurrentGame">?? Jugar otra vez</button>
           <button class="completion-secondary" @click="$router.push('/home')">� Volver al inicio</button>
         </div>
       </section>
@@ -422,12 +446,28 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { io } from 'socket.io-client'
 
 import BackToMenu from '../../components/BackToMenu.vue'
 import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
 
 const route = useRoute()
 const idJuego = computed(() => Number(route.params.id || 6))
+const codigoSala = computed(() => String(route.query.sala || '').trim().toUpperCase())
+const multijugador = computed(() => Boolean(codigoSala.value))
+const socketDetective = ref(null)
+const idUsuario = ref(0)
+const jugadoresDetective = ref([])
+const turnoDetective = ref(null)
+const estadoConexion = ref('')
+const turnoSegundosRestantes = ref(25)
+const venceEnDetective = ref(null)
+let countdownInterval = null
+const nombreTurno = computed(() =>
+  jugadoresDetective.value.find(j => j.id_usuario === turnoDetective.value)?.nombre || 'otro jugador'
+)
+const enviandoRespuesta = ref(false)
+const resultadoDetectiveEnviado = ref(false)
 
 
 // ========================================
@@ -495,6 +535,182 @@ const resetCaseState = () => {
 
 
 // ========================================
+// ========================================
+// CONEXIÓN Y ESTADO MULTIJUGADOR
+// ========================================
+
+const emitirDetective = (evento, datos) => new Promise(resolve => {
+  if (!socketDetective.value?.connected) {
+    resolve({ ok: false, mensaje: 'No hay conexión con la sala.' })
+    return
+  }
+  if (datos === undefined) {
+    socketDetective.value.emit(evento, resolve)
+  } else {
+    socketDetective.value.emit(evento, datos, resolve)
+  }
+})
+
+const guardarResultadoDetectiveMultijugador = () => {
+  if (!resultadoGuardado.value || !horaInicio.value || resultadoDetectiveEnviado.value) return
+  resultadoDetectiveEnviado.value = true
+  const horaFin = new Date()
+  void guardarResultadoPartida({
+    idJuego: idJuego.value,
+    horaInicio: horaInicio.value,
+    horaFin,
+    tiempoTranscurrido: secondsElapsed.value,
+    aciertos: hits.value,
+    errores: errors.value,
+    puntuacion: totalScore.value
+  })
+}
+
+const actualizarCuentaRegresivaDetective = () => {
+  if (!venceEnDetective.value) {
+    turnoSegundosRestantes.value = 25
+    return
+  }
+  turnoSegundosRestantes.value = Math.max(
+    0,
+    Math.ceil((venceEnDetective.value - Date.now()) / 1000)
+  )
+}
+
+const aplicarEstadoDetective = estado => {
+  if (!estado || estado.codigo !== codigoSala.value) return
+
+  selectedSubjectFilter.value = 'ALL'
+  currentCaseIndex.value = Number(estado.indiceCaso || 0)
+  solvedMap.value = { ...(estado.resueltos || {}) }
+  jugadoresDetective.value = estado.jugadores || []
+  turnoDetective.value = estado.turno
+  venceEnDetective.value = Number(estado.venceEn || 0) || null
+  if (estado.terminado) {
+    turnoSegundosRestantes.value = 0
+  } else {
+    actualizarCuentaRegresivaDetective()
+  }
+
+  const yo = jugadoresDetective.value.find(j => j.id_usuario === idUsuario.value)
+  hits.value = Number(yo?.aciertos || 0)
+  errors.value = Number(yo?.errores || 0)
+  totalScore.value = Number(yo?.puntuacion || 0)
+  const jugadorEnTurno = jugadoresDetective.value.find(j => j.id_usuario === turnoDetective.value)
+  currentLives.value = Number(jugadorEnTurno?.vidas ?? 3)
+  clueLevel.value = Number(jugadorEnTurno?.pista || 1)
+
+  if (estado.casos?.length) {
+    enigmas.value = estado.casos.map(caso => {
+      const existente = enigmas.value.find(e => Number(e.id) === Number(caso.id))
+      return existente || {
+        id: caso.id,
+        subject: caso.subject,
+        title: caso.title,
+        answer: '',
+        clues: caso.clues
+      }
+    })
+  }
+
+  if (!horaInicio.value) {
+    horaInicio.value = new Date()
+    startTimer()
+  }
+
+  if (estado.terminado) {
+    resultadoGuardado.value = true
+    if (timerInterval) clearInterval(timerInterval)
+    timerInterval = null
+    estadoConexion.value = 'La partida terminó. Todos los expedientes fueron resueltos.'
+    guardarResultadoDetectiveMultijugador()
+  } else if (estado.aviso) {
+    estadoConexion.value = estado.aviso
+  } else if (turnoDetective.value === idUsuario.value) {
+    estadoConexion.value = 'Es tu turno. Analiza las pistas y resuelve el expediente.'
+  } else {
+    estadoConexion.value = `Es el turno de ${nombreTurno.value}.`
+  }
+}
+
+const conectarDetectiveMultijugador = () => {
+  try {
+    const usuarioGuardado = JSON.parse(localStorage.getItem('usuario') || 'null')
+    idUsuario.value = Number(usuarioGuardado?.id_usuario || 0)
+  } catch {
+    idUsuario.value = 0
+  }
+
+  if (!idUsuario.value) {
+    errorCarga.value = 'No se pudo identificar tu usuario para la partida multijugador.'
+    return
+  }
+
+  estadoConexion.value = 'Conectando con la sala…'
+  if (countdownInterval) clearInterval(countdownInterval)
+  countdownInterval = setInterval(actualizarCuentaRegresivaDetective, 250)
+  socketDetective.value = io('http://localhost:3000', {
+    reconnection: true,
+    reconnectionAttempts: 5,
+    timeout: 10000
+  })
+
+  socketDetective.value.on('connect', () => {
+    socketDetective.value.emit('detective:reconectar', {
+      codigo: codigoSala.value,
+      id_usuario: idUsuario.value
+    }, respuesta => {
+      if (!respuesta?.ok) {
+        estadoConexion.value = respuesta?.mensaje || 'No se pudo recuperar la partida.'
+        return
+      }
+      aplicarEstadoDetective(respuesta.estado)
+      estadoConexion.value = `Conectado a la sala ${codigoSala.value}`
+    })
+  })
+
+  socketDetective.value.on('detective:estado', aplicarEstadoDetective)
+  socketDetective.value.on('disconnect', () => {
+    estadoConexion.value = 'Conexión perdida. Intentando reconectar…'
+  })
+  socketDetective.value.on('connect_error', () => {
+    estadoConexion.value = 'No se pudo conectar con el servidor multijugador.'
+  })
+}
+
+const solicitarPistaMultijugador = async () => {
+  const respuesta = await emitirDetective('detective:pista')
+  if (!respuesta?.ok) {
+    modalSuccess.value = false
+    modalMessage.value = respuesta?.mensaje || 'No se pudo solicitar la pista.'
+    showModal.value = true
+    return
+  }
+  if (respuesta.estado) aplicarEstadoDetective(respuesta.estado)
+}
+
+const enviarRespuestaMultijugador = async () => {
+  if (enviandoRespuesta.value) return
+  enviandoRespuesta.value = true
+  const respuesta = await emitirDetective('detective:responder', {
+    respuesta: deductionInput.value
+  })
+  enviandoRespuesta.value = false
+
+  if (!respuesta?.ok) {
+    modalSuccess.value = false
+    modalMessage.value = respuesta?.mensaje || 'No se pudo enviar la respuesta.'
+    showModal.value = true
+    return
+  }
+
+  if (respuesta.estado) aplicarEstadoDetective(respuesta.estado)
+  modalSuccess.value = Boolean(respuesta.correcta)
+  modalMessage.value = respuesta.mensaje || ''
+  showModal.value = true
+  deductionInput.value = ''
+}
+
 // OBTENER ENIGMAS DESDE MYSQL
 // ========================================
 
@@ -623,18 +839,12 @@ const availableSubjects = computed(() => [
 
 const filteredEnigmas = computed(() => {
 
-  if (
-    selectedSubjectFilter.value === 'ALL'
-  ) {
-
+  if (multijugador.value || selectedSubjectFilter.value === 'ALL') {
     return enigmas.value
-
   }
 
   return enigmas.value.filter(
-    enigma =>
-      enigma.subject ===
-      selectedSubjectFilter.value
+    enigma => enigma.subject === selectedSubjectFilter.value
   )
 
 })
@@ -666,11 +876,12 @@ const progressPercentage = computed(() => {
     return 0
   }
 
+  const avance = multijugador.value
+    ? Object.keys(solvedMap.value).length
+    : hits.value
+
   return Math.round(
-    (
-      hits.value /
-      enigmas.value.length
-    ) * 100
+    (avance / enigmas.value.length) * 100
   )
 
 })
@@ -715,6 +926,11 @@ const getSolvedPoints = (id) => {
 
 const requestMoreClue = () => {
 
+  if (multijugador.value) {
+    if (turnoDetective.value === idUsuario.value) void solicitarPistaMultijugador()
+    return
+  }
+
   if (clueLevel.value < 3) {
     clueLevel.value++
   }
@@ -753,6 +969,11 @@ const submitDeduction = () => {
     !deductionInput.value.trim()
     || !activeCase.value
   ) {
+    return
+  }
+
+  if (multijugador.value) {
+    if (turnoDetective.value === idUsuario.value) void enviarRespuestaMultijugador()
     return
   }
 
@@ -802,6 +1023,7 @@ const submitDeduction = () => {
     deductionInput.value = ''
 
     if (
+      !multijugador.value &&
       hits.value === enigmas.value.length &&
       enigmas.value.length > 0 &&
       !resultadoGuardado.value
@@ -972,7 +1194,11 @@ onMounted(async () => {
 
   await obtenerEnigmas()
 
-  startTimer()
+  if (multijugador.value) {
+    conectarDetectiveMultijugador()
+  } else {
+    startTimer()
+  }
 
 })
 
@@ -985,6 +1211,17 @@ onUnmounted(() => {
 
   if (timerInterval) {
     clearInterval(timerInterval)
+  }
+
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
+
+  if (socketDetective.value) {
+    socketDetective.value.removeAllListeners()
+    socketDetective.value.disconnect()
+    socketDetective.value = null
   }
 
 })
@@ -1810,10 +2047,50 @@ onUnmounted(() => {
 @keyframes completion-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 @media(max-width:500px){.completion-card{padding:24px 18px}}
 </style><style scoped>
+.multiplayer-turn-timer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0;padding:12px 16px;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;color:#312e81}
+.multiplayer-turn-timer span{font-size:.85rem;font-weight:700}
+.multiplayer-turn-timer strong{font-size:1.35rem;font-variant-numeric:tabular-nums}
+.multiplayer-turn-timer.timer-warning{border-color:#fca5a5;background:#fef2f2;color:#b91c1c}
 .feedback-success{background:#16a34a;color:#fff}.feedback-error{background:#dc2626;color:#fff}
 .feedback-success h3,.feedback-success p,.feedback-error h3,.feedback-error p{color:#fff}
 .feedback-success .modal-icon.success,.feedback-error .modal-icon.error{background:rgba(255,255,255,.2);color:#fff}
 .completion-card{background:#16a34a;color:#fff;border-color:rgba(255,255,255,.55)}
 .completion-card h2,.completion-card .completion-copy,.completion-card .completion-stats strong,.completion-card .completion-stats span{color:#fff}
 .completion-card .completion-icon,.completion-card .completion-stats div{background:rgba(255,255,255,.17)}
+
+.multiplayer-panel {
+  margin: 0 auto 1.5rem;
+  max-width: 1100px;
+  padding: 1rem 1.25rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+.multiplayer-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: .85rem;
+}
+.multiplayer-status strong { color: #1d4ed8; }
+.multiplayer-status span { color: #475569; font-size: .9rem; }
+.multiplayer-scoreboard { display: flex; flex-wrap: wrap; gap: .75rem; }
+.multiplayer-player {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  min-width: 150px;
+  padding: .7rem .85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: white;
+}
+.multiplayer-player.current-player {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .12);
+}
+.multiplayer-player span { font-weight: 700; }
+.multiplayer-player small { color: #64748b; }
 </style>

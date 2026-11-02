@@ -1,13 +1,20 @@
 <script setup>
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
 import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
+import { io } from 'socket.io-client'
 
 const router = useRouter()
 const route = useRoute()
 const idJuego = computed(() => Number(route.params.id || 5))
+const codigoSala = computed(() => String(route.query.sala || '').trim().toUpperCase())
+const multijugador = computed(() => Boolean(codigoSala.value))
+const socketQuiz = ref(null)
+const idUsuario = ref(null)
+const marcadorJugadores = ref([])
+const estadoConexionQuiz = ref('')
 
 // ===============================
 // PREGUNTAS
@@ -52,8 +59,71 @@ const obtenerPreguntas = async () => {
   }
 }
 
-onMounted(() => {
-  obtenerPreguntas()
+const conectarQuizMultijugador = () => {
+  try {
+    const usuarioGuardado = JSON.parse(localStorage.getItem('usuario') || 'null')
+    idUsuario.value = Number(usuarioGuardado?.id_usuario || 0)
+  } catch {
+    idUsuario.value = 0
+  }
+
+  if (!idUsuario.value) {
+    errorCarga.value = 'No se pudo identificar tu usuario para la partida multijugador.'
+    return
+  }
+
+  estadoConexionQuiz.value = 'Conectando con la sala…'
+  socketQuiz.value = io('http://localhost:3000', {
+    reconnection: true,
+    reconnectionAttempts: 5,
+    timeout: 10000
+  })
+
+  socketQuiz.value.on('connect', () => {
+    socketQuiz.value.emit('reconectar-partida', {
+      codigo: codigoSala.value,
+      id_usuario: idUsuario.value
+    }, (respuesta) => {
+      if (!respuesta?.ok) {
+        estadoConexionQuiz.value = respuesta?.mensaje || 'No se pudo recuperar la partida.'
+        return
+      }
+      marcadorJugadores.value = respuesta.quiz?.jugadores || []
+      estadoConexionQuiz.value = `Conectado a la sala ${codigoSala.value}`
+    })
+  })
+
+  socketQuiz.value.on('quiz:marcador', (datos) => {
+    if (datos?.codigo === codigoSala.value) {
+      marcadorJugadores.value = datos.jugadores || []
+    }
+  })
+
+  socketQuiz.value.on('disconnect', () => {
+    estadoConexionQuiz.value = 'Conexión perdida. Intentando reconectar…'
+  })
+
+  socketQuiz.value.on('connect_error', () => {
+    estadoConexionQuiz.value = 'No se pudo conectar con el servidor multijugador.'
+  })
+}
+
+const responderEnServidor = (indice, letra) => new Promise((resolve) => {
+  if (!socketQuiz.value?.connected) {
+    resolve({ ok: false, mensaje: 'No hay conexión con la sala.' })
+    return
+  }
+  socketQuiz.value.emit('quiz:responder', { indice, letra }, resolve)
+})
+
+onMounted(async () => {
+  await obtenerPreguntas()
+  if (multijugador.value && !errorCarga.value) conectarQuizMultijugador()
+})
+
+onBeforeUnmount(() => {
+  socketQuiz.value?.removeAllListeners()
+  socketQuiz.value?.disconnect()
 })
 // ===============================
 // ESTADO DEL JUEGO
@@ -123,22 +193,35 @@ const progreso = computed(() => {
 // RESPONDER
 // ===============================
 
-const seleccionarRespuesta = (letra) => {
-  if (respondida.value) return
+const seleccionarRespuesta = async (letra) => {
+  if (respondida.value || !pregunta.value) return
 
-  if (!horaInicio.value) {
-    horaInicio.value = new Date()
+  if (!horaInicio.value) horaInicio.value = new Date()
+
+  let esCorrecta
+  if (multijugador.value) {
+    const respuestaServidor = await responderEnServidor(preguntaActual.value, letra)
+    if (!respuestaServidor?.ok) {
+      errorCarga.value = respuestaServidor?.mensaje || 'No se pudo enviar tu respuesta.'
+      return
+    }
+    esCorrecta = respuestaServidor.correcta
+    pregunta.value.respuesta_correcta = respuestaServidor.respuesta_correcta
+    puntuacion.value = respuestaServidor.puntuacion
+    aciertos.value = respuestaServidor.aciertos
+    errores.value = respuestaServidor.errores
+  } else {
+    esCorrecta = letra === pregunta.value.respuesta_correcta
+    if (esCorrecta) {
+      aciertos.value++
+      puntuacion.value += 100
+    } else {
+      errores.value++
+    }
   }
 
   respuestaSeleccionada.value = letra
   respondida.value = true
-
-  if (letra === pregunta.value.respuesta_correcta) {
-    aciertos.value++
-    puntuacion.value += 100
-  } else {
-    errores.value++
-  }
 }
 
 // ===============================
@@ -174,6 +257,9 @@ const siguientePregunta = () => {
   if (preguntaActual.value < preguntas.value.length - 1) {
 
     preguntaActual.value++
+    if (multijugador.value && socketQuiz.value?.connected) {
+      socketQuiz.value.emit('quiz:siguiente', { indice: preguntaActual.value })
+    }
 
     respuestaSeleccionada.value = ''
     respondida.value = false
@@ -222,6 +308,9 @@ const reiniciarJuego = () => {
 // ===============================
 
 const regresar = () => {
+  if (multijugador.value && socketQuiz.value?.connected) {
+    socketQuiz.value.emit('salir-sala')
+  }
   router.push('/home')
 }
 </script>
@@ -270,6 +359,17 @@ const regresar = () => {
 
       </header>
 
+      <section v-if="multijugador" class="multiplayer-scoreboard">
+        <div class="multiplayer-status">{{ estadoConexionQuiz }}</div>
+        <h3>Marcador de la sala</h3>
+        <ol>
+          <li v-for="jugador in [...marcadorJugadores].sort((a, b) => b.puntuacion - a.puntuacion)" :key="jugador.id_usuario">
+            <span>{{ jugador.nombre }} <small v-if="jugador.id_usuario === idUsuario">(Tú)</small></span>
+            <strong>{{ jugador.puntuacion }} pts</strong>
+            <small>{{ jugador.aciertos }} aciertos · pregunta {{ Math.min(jugador.pregunta + 1, preguntas.length) }}/{{ preguntas.length }}</small>
+          </li>
+        </ol>
+      </section>
 
       <!-- INFORMACIÓN -->
 
@@ -475,6 +575,7 @@ const regresar = () => {
         <div class="result-buttons">
 
           <button
+            v-if="!multijugador"
             class="restart-button"
             @click="reiniciarJuego"
           >
@@ -500,6 +601,21 @@ const regresar = () => {
 
 
 <style scoped>
+
+.multiplayer-scoreboard {
+  max-width: 900px;
+  margin: 18px auto;
+  padding: 18px 22px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #fff;
+}
+.multiplayer-scoreboard h3 { margin: 8px 0 12px; }
+.multiplayer-status { color: #475569; font-size: 13px; }
+.multiplayer-scoreboard ol { margin: 0; padding-left: 22px; }
+.multiplayer-scoreboard li { padding: 7px 0; display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; }
+.multiplayer-scoreboard li small { color: #64748b; }
+.multiplayer-scoreboard li small:last-child { grid-column: 1 / -1; }
 
 /* =========================
    GENERAL

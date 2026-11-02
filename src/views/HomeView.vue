@@ -571,6 +571,8 @@ onMounted(() => {
                 :route="
                   rutaJuego(juego)
                 "
+
+                :multiplayer-route="`/multijugador/${juego.id_juego}`"
               />
 
             </div>

@@ -2,6 +2,8 @@ const express = require('express')
 const cors = require('cors')
 const conexion = require('./db')
 const bcrypt = require('bcrypt')
+const http = require('http')
+const { Server } = require('socket.io')
 
 
 const app = express()
@@ -1799,13 +1801,858 @@ app.get('/api/resultados/usuario/:id', async (req, res) => {
 
 
 // ========================================
+// MULTIJUGADOR: SALAS EN TIEMPO REAL
+// ========================================
+
+const servidor = http.createServer(app)
+const io = new Server(servidor, {
+  cors: {
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    methods: ['GET', 'POST']
+  }
+})
+
+// Las salas viven en memoria durante esta primera etapa.
+// Si se reinicia el backend, las salas activas se cierran.
+const salas = new Map()
+const MAX_PARTICIPANTES = 8
+const CARACTERES_CODIGO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+function generarCodigoSala() {
+  let codigo
+  do {
+    codigo = Array.from({ length: 6 }, () =>
+      CARACTERES_CODIGO[Math.floor(Math.random() * CARACTERES_CODIGO.length)]
+    ).join('')
+  } while (salas.has(codigo))
+  return codigo
+}
+
+function obtenerSalaPublica(sala) {
+  return {
+    codigo: sala.codigo,
+    id_juego: sala.id_juego,
+    id_tipo: sala.id_tipo,
+    nombre_juego: sala.nombre_juego,
+    estado: sala.estado,
+    anfitrion_id: sala.anfitrion_id,
+    participantes: sala.participantes.map(({ id_usuario, nombre }) => ({
+      id_usuario,
+      nombre,
+      es_anfitrion: id_usuario === sala.anfitrion_id
+    }))
+  }
+}
+
+function emitirActualizacionSala(sala) {
+  io.to(sala.codigo).emit('sala-actualizada', obtenerSalaPublica(sala))
+}
+
+async function buscarUsuario(idUsuario) {
+  const id = Number(idUsuario)
+  if (!Number.isInteger(id) || id <= 0) return null
+
+  const [usuarios] = await conexion.query(
+    'SELECT id_usuario, nombre FROM usuarios WHERE id_usuario = ?',
+    [id]
+  )
+
+  return usuarios[0] || null
+}
+
+function quitarParticipante(sala, idUsuario) {
+  sala.participantes = sala.participantes.filter(
+    participante => participante.id_usuario !== idUsuario
+  )
+
+  if (sala.participantes.length === 0) {
+    salas.delete(sala.codigo)
+    return false
+  }
+
+  if (!sala.participantes.some(p => p.id_usuario === sala.anfitrion_id)) {
+    sala.anfitrion_id = sala.participantes[0].id_usuario
+  }
+
+  return true
+}
+
+io.on('connection', socket => {
+  console.log(`🔌 Cliente conectado: ${socket.id}`)
+
+  socket.on('crear-sala', async (datos = {}, responder = () => {}) => {
+    try {
+      const idJuego = Number(datos.id_juego)
+      const usuario = await buscarUsuario(datos.id_usuario)
+
+      if (!usuario || !Number.isInteger(idJuego) || idJuego <= 0) {
+        return responder({ ok: false, mensaje: 'Usuario o juego no válido.' })
+      }
+
+      const [juegos] = await conexion.query(
+        'SELECT id_juego, id_tipo, nombre FROM juegos WHERE id_juego = ? AND activo = TRUE',
+        [idJuego]
+      )
+
+      if (!juegos.length) {
+        return responder({ ok: false, mensaje: 'El juego no existe o está inactivo.' })
+      }
+
+      const codigo = generarCodigoSala()
+      const sala = {
+        codigo,
+        id_juego: idJuego,
+        id_tipo: Number(juegos[0].id_tipo),
+        nombre_juego: juegos[0].nombre,
+        estado: 'esperando',
+        anfitrion_id: usuario.id_usuario,
+        participantes: [{
+          id_usuario: usuario.id_usuario,
+          nombre: usuario.nombre,
+          socket_id: socket.id
+        }],
+        quiz: { jugadores: {} }
+      }
+
+      salas.set(codigo, sala)
+      socket.join(codigo)
+      socket.data.codigoSala = codigo
+      socket.data.idUsuario = usuario.id_usuario
+
+      responder({ ok: true, sala: obtenerSalaPublica(sala) })
+      emitirActualizacionSala(sala)
+    } catch (error) {
+      console.error('Error al crear sala:', error.message)
+      responder({ ok: false, mensaje: 'No se pudo crear la sala.' })
+    }
+  })
+
+  socket.on('unirse-sala', async (datos = {}, responder = () => {}) => {
+    try {
+      const codigo = String(datos.codigo || '').trim().toUpperCase()
+      const sala = salas.get(codigo)
+      const usuario = await buscarUsuario(datos.id_usuario)
+
+      if (!usuario) {
+        return responder({ ok: false, mensaje: 'No se encontró el usuario.' })
+      }
+      if (!sala) {
+        return responder({ ok: false, mensaje: 'La sala no existe o ya se cerró.' })
+      }
+      if (sala.estado !== 'esperando') {
+        return responder({ ok: false, mensaje: 'La partida ya comenzó.' })
+      }
+
+      const existente = sala.participantes.find(p => p.id_usuario === usuario.id_usuario)
+      if (existente) {
+        existente.socket_id = socket.id
+      } else {
+        if (sala.participantes.length >= MAX_PARTICIPANTES) {
+          return responder({ ok: false, mensaje: 'La sala está llena (máximo 8 jugadores).' })
+        }
+        sala.participantes.push({
+          id_usuario: usuario.id_usuario,
+          nombre: usuario.nombre,
+          socket_id: socket.id
+        })
+      }
+
+      socket.join(codigo)
+      socket.data.codigoSala = codigo
+      socket.data.idUsuario = usuario.id_usuario
+
+      responder({ ok: true, sala: obtenerSalaPublica(sala) })
+      emitirActualizacionSala(sala)
+    } catch (error) {
+      console.error('Error al unirse a sala:', error.message)
+      responder({ ok: false, mensaje: 'No se pudo ingresar a la sala.' })
+    }
+  })
+
+  socket.on('iniciar-partida', (responder = () => {}) => {
+    const codigo = socket.data.codigoSala
+    const sala = codigo ? salas.get(codigo) : null
+
+    if (!sala) return responder({ ok: false, mensaje: 'La sala ya no está disponible.' })
+    if (socket.data.idUsuario !== sala.anfitrion_id) {
+      return responder({ ok: false, mensaje: 'Solo el anfitrión puede iniciar la partida.' })
+    }
+    if (sala.participantes.length < 2) {
+      return responder({ ok: false, mensaje: 'Se necesitan al menos 2 jugadores.' })
+    }
+
+    sala.estado = 'en_juego'
+    responder({ ok: true })
+    io.to(codigo).emit('partida-iniciada', obtenerSalaPublica(sala))
+  })
+
+  // Permite que cada participante recupere su lugar cuando el anfitrión
+  // inicia el juego y el navegador cambia de la vista de sala a la del Quiz.
+  socket.on('reconectar-partida', (datos = {}, responder = () => {}) => {
+    const codigo = String(datos.codigo || '').trim().toUpperCase()
+    const sala = salas.get(codigo)
+    const idUsuario = Number(datos.id_usuario)
+    const participante = sala?.participantes.find(p => p.id_usuario === idUsuario)
+
+    if (!sala || sala.estado !== 'en_juego' || !participante) {
+      return responder({ ok: false, mensaje: 'No se encontró tu participación en esta partida.' })
+    }
+
+    participante.socket_id = socket.id
+    socket.join(codigo)
+    socket.data.codigoSala = codigo
+    socket.data.idUsuario = idUsuario
+
+    if (!sala.quiz) sala.quiz = { jugadores: {} }
+    if (!sala.quiz.jugadores[idUsuario]) {
+      sala.quiz.jugadores[idUsuario] = {
+        pregunta: 0,
+        puntuacion: 0,
+        aciertos: 0,
+        errores: 0,
+        respuestas: {}
+      }
+    }
+
+    responder({
+      ok: true,
+      sala: obtenerSalaPublica(sala),
+      quiz: obtenerMarcadorQuiz(sala)
+    })
+    io.to(codigo).emit('quiz:marcador', obtenerMarcadorQuiz(sala))
+  })
+
+  function obtenerMarcadorQuiz(sala) {
+    return {
+      codigo: sala.codigo,
+      jugadores: sala.participantes.map(p => {
+        const estado = sala.quiz?.jugadores?.[p.id_usuario] || {}
+        return {
+          id_usuario: p.id_usuario,
+          nombre: p.nombre,
+          pregunta: Number(estado.pregunta || 0),
+          puntuacion: Number(estado.puntuacion || 0),
+          aciertos: Number(estado.aciertos || 0),
+          errores: Number(estado.errores || 0)
+        }
+      })
+    }
+  }
+
+
+  // ========================================
+  // MEMORAMA MULTIJUGADOR: ESTADO AUTORITATIVO
+  // ========================================
+
+  function mezclarCartasMemorama(cartas) {
+    const copia = [...cartas]
+    for (let i = copia.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[copia[i], copia[j]] = [copia[j], copia[i]]
+    }
+    return copia
+  }
+
+  function obtenerEstadoMemorama(sala) {
+    const juego = sala.memorama
+    if (!juego) return null
+    return {
+      codigo: sala.codigo,
+      cartas: juego.cartas.map((carta, indice) => ({
+        uid: carta.uid,
+        id: carta.id,
+        tipo: carta.tipo,
+        texto: carta.texto,
+        volteada: carta.volteada,
+        encontrada: carta.encontrada,
+        indice
+      })),
+      intentos: juego.intentos,
+      parejas: juego.parejas,
+      totalParejas: juego.totalParejas,
+      turno: juego.turno,
+      bloqueado: juego.bloqueado,
+      terminado: juego.terminado,
+      jugadores: sala.participantes.map(p => ({
+        id_usuario: p.id_usuario,
+        nombre: p.nombre,
+        puntuacion: juego.puntuaciones[p.id_usuario] || 0,
+        aciertos: juego.aciertos[p.id_usuario] || 0
+      }))
+    }
+  }
+
+  async function inicializarMemorama(sala) {
+    if (sala.memorama) return sala.memorama
+    const [parejas] = await conexion.query(
+      `SELECT id_pareja, elemento_1, elemento_2
+       FROM parejas_memorama
+       WHERE id_juego = ?
+       ORDER BY id_pareja`,
+      [sala.id_juego]
+    )
+    if (!parejas.length) throw new Error('Este memorama no tiene parejas registradas.')
+    const cartas = []
+    for (const pareja of parejas) {
+      cartas.push({
+        uid: `concepto-${pareja.id_pareja}`,
+        id: pareja.id_pareja,
+        tipo: 'concepto',
+        texto: pareja.elemento_1,
+        volteada: false,
+        encontrada: false
+      })
+      cartas.push({
+        uid: `definicion-${pareja.id_pareja}`,
+        id: pareja.id_pareja,
+        tipo: 'definicion',
+        texto: pareja.elemento_2,
+        volteada: false,
+        encontrada: false
+      })
+    }
+    sala.memorama = {
+      cartas: mezclarCartasMemorama(cartas),
+      primera: null,
+      intentos: 0,
+      parejas: 0,
+      totalParejas: parejas.length,
+      turno: sala.participantes[0]?.id_usuario || null,
+      bloqueado: false,
+      terminado: false,
+      puntuaciones: Object.fromEntries(sala.participantes.map(p => [p.id_usuario, 0])),
+      aciertos: Object.fromEntries(sala.participantes.map(p => [p.id_usuario, 0])),
+      temporizadorError: null
+    }
+    return sala.memorama
+  }
+
+  socket.on('memorama:reconectar', async (datos = {}, responder = () => {}) => {
+    try {
+      const codigo = String(datos.codigo || '').trim().toUpperCase()
+      const sala = salas.get(codigo)
+      const idUsuario = Number(datos.id_usuario)
+      const participante = sala?.participantes.find(p => p.id_usuario === idUsuario)
+      if (!sala || sala.estado !== 'en_juego' || sala.id_tipo !== 4 || !participante) {
+        return responder({ ok: false, mensaje: 'No se encontró tu partida de Memorama.' })
+      }
+      participante.socket_id = socket.id
+      socket.join(codigo)
+      socket.data.codigoSala = codigo
+      socket.data.idUsuario = idUsuario
+      await inicializarMemorama(sala)
+      const estado = obtenerEstadoMemorama(sala)
+      responder({ ok: true, estado })
+      io.to(codigo).emit('memorama:estado', estado)
+    } catch (error) {
+      console.error('Error al recuperar Memorama:', error.message)
+      responder({ ok: false, mensaje: error.message || 'No se pudo recuperar el Memorama.' })
+    }
+  })
+
+  socket.on('memorama:seleccionar', async (datos = {}, responder = () => {}) => {
+    const codigo = socket.data.codigoSala
+    const sala = codigo ? salas.get(codigo) : null
+    const idUsuario = socket.data.idUsuario
+    const juego = sala?.memorama
+    const indice = Number(datos.indice)
+
+    if (!sala || sala.estado !== 'en_juego' || sala.id_tipo !== 4 || !juego) {
+      return responder({ ok: false, mensaje: 'La partida de Memorama no está disponible.' })
+    }
+    if (!sala.participantes.some(p => p.id_usuario === idUsuario)) {
+      return responder({ ok: false, mensaje: 'No formas parte de esta sala.' })
+    }
+    if (juego.terminado) return responder({ ok: false, mensaje: 'El memorama ya terminó.' })
+    if (juego.bloqueado) return responder({ ok: false, mensaje: 'Espera a que se resuelva el intento actual.' })
+    if (juego.turno !== idUsuario) return responder({ ok: false, mensaje: 'Es el turno de otro jugador.' })
+    if (!Number.isInteger(indice) || indice < 0 || indice >= juego.cartas.length) {
+      return responder({ ok: false, mensaje: 'La carta seleccionada no es válida.' })
+    }
+    const carta = juego.cartas[indice]
+    if (carta.volteada || carta.encontrada) {
+      return responder({ ok: false, mensaje: 'Esa carta ya está seleccionada.' })
+    }
+
+    carta.volteada = true
+    if (juego.primera === null) {
+      juego.primera = indice
+      const estado = obtenerEstadoMemorama(sala)
+      responder({ ok: true, estado })
+      io.to(codigo).emit('memorama:estado', estado)
+      return
+    }
+
+    const primera = juego.cartas[juego.primera]
+    juego.intentos += 1
+    juego.bloqueado = true
+    const coincide = primera.id === carta.id && primera.tipo !== carta.tipo
+    if (coincide) {
+      primera.encontrada = true
+      carta.encontrada = true
+      juego.parejas += 1
+      juego.puntuaciones[idUsuario] = (juego.puntuaciones[idUsuario] || 0) + 100
+      juego.aciertos[idUsuario] = (juego.aciertos[idUsuario] || 0) + 1
+      juego.primera = null
+      juego.bloqueado = false
+      if (juego.parejas === juego.totalParejas) juego.terminado = true
+    } else {
+      juego.puntuaciones[idUsuario] = Math.max(0, (juego.puntuaciones[idUsuario] || 0) - 10)
+      const primeraIndice = juego.primera
+      juego.primera = null
+      juego.temporizadorError = setTimeout(() => {
+        const salaActual = salas.get(codigo)
+        const juegoActual = salaActual?.memorama
+        if (!juegoActual || juegoActual.terminado) return
+        juegoActual.cartas[primeraIndice].volteada = false
+        juegoActual.cartas[indice].volteada = false
+        juegoActual.turno = siguienteJugador(salaActual, idUsuario)
+        juegoActual.bloqueado = false
+        juegoActual.temporizadorError = null
+        io.to(codigo).emit('memorama:estado', obtenerEstadoMemorama(salaActual))
+      }, 850)
+    }
+
+    const estado = obtenerEstadoMemorama(sala)
+    responder({ ok: true, coincide, estado })
+    io.to(codigo).emit('memorama:estado', estado)
+  })
+
+  function siguienteJugador(sala, idActual) {
+    const participantes = sala.participantes
+    if (!participantes.length) return null
+    const indice = participantes.findIndex(p => p.id_usuario === idActual)
+    return participantes[(indice + 1) % participantes.length].id_usuario
+  }
+
+
+  // ========================================
+  // MULTIJUGADOR: DETECTIVE ESCOLAR
+  // ========================================
+
+  function normalizarRespuestaDetective(valor) {
+    return String(valor || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '')
+  }
+
+  function siguienteCasoDetective(juego) {
+    const siguiente = juego.casos.findIndex(
+      (caso, indice) => indice > juego.indiceCaso && !juego.resueltos[caso.id]
+    )
+    if (siguiente !== -1) return siguiente
+    return juego.casos.findIndex(caso => !juego.resueltos[caso.id])
+  }
+
+  function obtenerEstadoDetective(sala) {
+    const juego = sala.detective
+    if (!juego) return null
+
+    return {
+      codigo: sala.codigo,
+      casos: juego.casos.map(caso => ({
+        id: caso.id,
+        subject: caso.subject,
+        title: caso.title,
+        clues: [...caso.clues
+        ],
+        resuelto: Boolean(juego.resueltos[caso.id]),
+        puntos: Number(juego.resueltos[caso.id] || 0)
+      })),
+      indiceCaso: juego.indiceCaso,
+      turno: juego.turno,
+      terminado: juego.terminado,
+      venceEn: juego.venceEn || null,
+      aviso: juego.aviso || '',
+      resueltos: { ...juego.resueltos },
+      jugadores: sala.participantes.map(p => {
+        const estado = juego.jugadores[p.id_usuario] || {}
+        return {
+          id_usuario: p.id_usuario,
+          nombre: p.nombre,
+          puntuacion: Number(estado.puntuacion || 0),
+          aciertos: Number(estado.aciertos || 0),
+          errores: Number(estado.errores || 0),
+          vidas: Number(estado.vidas ?? 3),
+          pista: Number(estado.pista || 1)
+        }
+      })
+    }
+  }
+
+  const TIEMPO_TURNO_DETECTIVE_MS = 25_000
+
+  function programarTemporizadorDetective(sala) {
+    const juego = sala?.detective
+    if (!juego || juego.terminado || !juego.turno) return
+
+    if (juego.temporizadorTurno) clearTimeout(juego.temporizadorTurno)
+
+    const turnoProgramado = juego.turno
+    const venceEn = Date.now() + TIEMPO_TURNO_DETECTIVE_MS
+    juego.venceEn = venceEn
+    juego.temporizadorTurno = setTimeout(() => {
+      const salaActual = salas.get(sala.codigo)
+      const juegoActual = salaActual?.detective
+      if (
+        !juegoActual ||
+        juegoActual.terminado ||
+        juegoActual.turno !== turnoProgramado ||
+        juegoActual.venceEn !== venceEn
+      ) return
+
+      pasarTurnoDetectivePorTiempo(salaActual)
+    }, TIEMPO_TURNO_DETECTIVE_MS)
+  }
+
+  function detenerTemporizadorDetective(juego) {
+    if (juego?.temporizadorTurno) clearTimeout(juego.temporizadorTurno)
+    if (juego) {
+      juego.temporizadorTurno = null
+      juego.venceEn = null
+    }
+  }
+
+  function pasarTurnoDetectivePorTiempo(sala) {
+    const juego = sala?.detective
+    if (!juego || juego.terminado || !juego.turno) return false
+
+    const idAnterior = juego.turno
+    const jugadorAnterior = juego.jugadores[idAnterior]
+    if (jugadorAnterior) {
+      jugadorAnterior.vidas = 3
+      jugadorAnterior.pista = 1
+    }
+
+    const siguienteId = siguienteJugador(sala, idAnterior)
+    if (!siguienteId) return false
+
+    juego.turno = siguienteId
+    const siguiente = juego.jugadores[siguienteId]
+    if (siguiente) {
+      siguiente.vidas = 3
+      siguiente.pista = 1
+    }
+
+    const nombreSiguiente = sala.participantes.find(p => p.id_usuario === siguienteId)?.nombre || 'el siguiente jugador'
+    juego.aviso = `Se agotaron los 25 segundos. El turno pasa a ${nombreSiguiente}.`
+    programarTemporizadorDetective(sala)
+
+    const estado = obtenerEstadoDetective(sala)
+    io.to(sala.codigo).emit('detective:estado', estado)
+    juego.aviso = ''
+    return true
+  }
+
+  async function inicializarDetective(sala) {
+    if (sala.detective) return sala.detective
+
+    const [enigmas] = await conexion.query(
+      `SELECT id_enigma, materia, titulo, respuesta, pista_1, pista_2, pista_3
+       FROM enigmas_detective
+       WHERE id_juego = ?
+       ORDER BY id_enigma`,
+      [sala.id_juego]
+    )
+
+    if (!enigmas.length) {
+      throw new Error('Este juego Detective no tiene enigmas registrados.')
+    }
+
+    const jugadores = {}
+    for (const participante of sala.participantes) {
+      jugadores[participante.id_usuario] = {
+        puntuacion: 0,
+        aciertos: 0,
+        errores: 0,
+        vidas: 3,
+        pista: 1
+      }
+    }
+
+    sala.detective = {
+      casos: enigmas.map(enigma => ({
+        id: Number(enigma.id_enigma),
+        subject: enigma.materia,
+        title: enigma.titulo,
+        answer: enigma.respuesta,
+        clues: [enigma.pista_1, enigma.pista_2, enigma.pista_3]
+      })),
+      indiceCaso: 0,
+      turno: sala.participantes[0]?.id_usuario || null,
+      terminado: false,
+      resueltos: {},
+      jugadores,
+      venceEn: null,
+      temporizadorTurno: null,
+      aviso: ''
+    }
+    programarTemporizadorDetective(sala)
+    return sala.detective
+  }
+
+  socket.on('detective:reconectar', async (datos = {}, responder = () => {}) => {
+    try {
+      const codigo = String(datos.codigo || '').trim().toUpperCase()
+      const sala = salas.get(codigo)
+      const idUsuario = Number(datos.id_usuario)
+      const participante = sala?.participantes.find(p => p.id_usuario === idUsuario)
+
+      if (!sala || sala.estado !== 'en_juego' || sala.id_tipo !== 6 || !participante) {
+        return responder({ ok: false, mensaje: 'No se encontró tu partida de Detective.' })
+      }
+
+      participante.socket_id = socket.id
+      socket.join(codigo)
+      socket.data.codigoSala = codigo
+      socket.data.idUsuario = idUsuario
+
+      await inicializarDetective(sala)
+      if (!sala.detective.jugadores[idUsuario]) {
+        sala.detective.jugadores[idUsuario] = {
+          puntuacion: 0, aciertos: 0, errores: 0, vidas: 3, pista: 1
+        }
+      }
+
+      if (!sala.detective.venceEn) {
+        programarTemporizadorDetective(sala)
+      } else if (Date.now() >= sala.detective.venceEn) {
+        pasarTurnoDetectivePorTiempo(sala)
+      }
+
+      const estado = obtenerEstadoDetective(sala)
+      responder({ ok: true, estado })
+      io.to(codigo).emit('detective:estado', estado)
+    } catch (error) {
+      console.error('Error al recuperar Detective:', error.message)
+      responder({ ok: false, mensaje: error.message || 'No se pudo recuperar la partida de Detective.' })
+    }
+  })
+
+  socket.on('detective:pista', (responder = () => {}) => {
+    const codigo = socket.data.codigoSala
+    const sala = codigo ? salas.get(codigo) : null
+    const idUsuario = socket.data.idUsuario
+    const juego = sala?.detective
+    const jugador = juego?.jugadores?.[idUsuario]
+
+    if (sala && juego && juego.venceEn && Date.now() >= juego.venceEn) {
+      pasarTurnoDetectivePorTiempo(sala)
+      return responder({ ok: false, mensaje: 'Se agotaron los 25 segundos. El turno pasó al siguiente jugador.', estado: obtenerEstadoDetective(sala) })
+    }
+
+    if (!sala || sala.estado !== 'en_juego' || sala.id_tipo !== 6 || !juego || !jugador) {
+      return responder({ ok: false, mensaje: 'La partida de Detective no está disponible.' })
+    }
+    if (juego.terminado) return responder({ ok: false, mensaje: 'La partida ya terminó.' })
+    if (juego.turno !== idUsuario) return responder({ ok: false, mensaje: 'Es el turno de otro jugador.' })
+    if (jugador.pista >= 3) return responder({ ok: false, mensaje: 'Ya consultaste todas las pistas.' })
+
+    jugador.pista += 1
+    const estado = obtenerEstadoDetective(sala)
+    responder({ ok: true, estado })
+    io.to(codigo).emit('detective:estado', estado)
+  })
+
+  socket.on('detective:responder', (datos = {}, responder = () => {}) => {
+    const codigo = socket.data.codigoSala
+    const sala = codigo ? salas.get(codigo) : null
+    const idUsuario = socket.data.idUsuario
+    const juego = sala?.detective
+    const jugador = juego?.jugadores?.[idUsuario]
+    const respuesta = normalizarRespuestaDetective(datos.respuesta)
+
+    if (sala && juego && juego.venceEn && Date.now() >= juego.venceEn) {
+      pasarTurnoDetectivePorTiempo(sala)
+      return responder({ ok: false, mensaje: 'Se agotaron los 25 segundos. El turno pasó al siguiente jugador.', estado: obtenerEstadoDetective(sala) })
+    }
+
+    if (!sala || sala.estado !== 'en_juego' || sala.id_tipo !== 6 || !juego || !jugador) {
+      return responder({ ok: false, mensaje: 'La partida de Detective no está disponible.' })
+    }
+    if (juego.terminado) return responder({ ok: false, mensaje: 'La partida ya terminó.' })
+    if (juego.turno !== idUsuario) return responder({ ok: false, mensaje: 'Es el turno de otro jugador.' })
+    if (!respuesta) return responder({ ok: false, mensaje: 'Escribe una respuesta antes de comprobarla.' })
+
+    const caso = juego.casos[juego.indiceCaso]
+    if (!caso || juego.resueltos[caso.id]) {
+      return responder({ ok: false, mensaje: 'Este expediente ya fue resuelto.' })
+    }
+
+    const correcta = respuesta === normalizarRespuestaDetective(caso.answer)
+    let mensaje = ''
+
+    if (correcta) {
+      const puntos = jugador.pista === 1 ? 100 : jugador.pista === 2 ? 60 : 30
+      jugador.puntuacion += puntos
+      jugador.aciertos += 1
+      juego.resueltos[caso.id] = puntos
+      const siguiente = siguienteCasoDetective(juego)
+
+      if (siguiente === -1) {
+        juego.terminado = true
+        detenerTemporizadorDetective(juego)
+        mensaje = `¡Correcto! "${caso.answer}". Sumaste ${puntos} puntos. La partida terminó.`
+      } else {
+        juego.indiceCaso = siguiente
+        juego.turno = siguienteJugador(sala, idUsuario)
+        const siguienteJugadorSala = sala.participantes.find(p => p.id_usuario === juego.turno)
+        mensaje = `¡Correcto! "${caso.answer}". Sumaste ${puntos} puntos. Ahora juega ${siguienteJugadorSala?.nombre || 'el siguiente participante'}.`
+        const nuevoTurno = juego.jugadores[juego.turno]
+        if (nuevoTurno) {
+          nuevoTurno.vidas = 3
+          nuevoTurno.pista = 1
+        }
+        programarTemporizadorDetective(sala)
+      }
+    } else {
+      jugador.errores += 1
+      jugador.vidas = Math.max(0, jugador.vidas - 1)
+
+      if (jugador.vidas === 0) {
+        const siguienteId = siguienteJugador(sala, idUsuario)
+        juego.turno = siguienteId
+        jugador.vidas = 3
+        jugador.pista = 1
+        const siguienteJugadorEstado = juego.jugadores[siguienteId]
+        if (siguienteJugadorEstado) {
+          siguienteJugadorEstado.vidas = 3
+          siguienteJugadorEstado.pista = 1
+        }
+        const siguienteJugadorSala = sala.participantes.find(p => p.id_usuario === siguienteId)
+        mensaje = `Respuesta incorrecta. Se agotaron tus 3 intentos. El expediente sigue abierto y el turno pasa a ${siguienteJugadorSala?.nombre || "otro jugador"}.`
+        programarTemporizadorDetective(sala)
+      } else {
+        mensaje = `Respuesta incorrecta. Te quedan ${jugador.vidas} intento(s); conservas el turno.`
+      }
+    }
+
+    const estado = obtenerEstadoDetective(sala)
+    responder({
+      ok: true,
+      correcta,
+      mensaje,
+      respuesta: correcta ? caso.answer : null,
+      estado
+    })
+    io.to(codigo).emit('detective:estado', estado)
+  })
+
+  socket.on('quiz:responder', async (datos = {}, responder = () => {}) => {
+    try {
+      const codigo = socket.data.codigoSala
+      const sala = codigo ? salas.get(codigo) : null
+      const idUsuario = socket.data.idUsuario
+      const indice = Number(datos.indice)
+      const letra = String(datos.letra || '').trim().toUpperCase()
+
+      if (!sala || sala.estado !== 'en_juego' || sala.id_juego <= 0) {
+        return responder({ ok: false, mensaje: 'La partida ya no está disponible.' })
+      }
+      if (!sala.participantes.some(p => p.id_usuario === idUsuario)) {
+        return responder({ ok: false, mensaje: 'No formas parte de esta sala.' })
+      }
+      if (!Number.isInteger(indice) || indice < 0 || !['A', 'B', 'C', 'D'].includes(letra)) {
+        return responder({ ok: false, mensaje: 'La respuesta enviada no es válida.' })
+      }
+
+      const [preguntas] = await conexion.query(
+        `SELECT id_pregunta, respuesta_correcta
+         FROM preguntas
+         WHERE id_juego = ?
+         ORDER BY id_pregunta
+         LIMIT 1 OFFSET ?`,
+        [sala.id_juego, indice]
+      )
+      if (!preguntas.length) {
+        return responder({ ok: false, mensaje: 'La pregunta ya no existe.' })
+      }
+
+      if (!sala.quiz) sala.quiz = { jugadores: {} }
+      if (!sala.quiz.jugadores[idUsuario]) {
+        sala.quiz.jugadores[idUsuario] = {
+          pregunta: 0, puntuacion: 0, aciertos: 0, errores: 0, respuestas: {}
+        }
+      }
+      const estado = sala.quiz.jugadores[idUsuario]
+      if (estado.respuestas[indice]) {
+        return responder({ ok: false, mensaje: 'Ya respondiste esta pregunta.' })
+      }
+      if (indice !== estado.pregunta) {
+        return responder({ ok: false, mensaje: 'El número de pregunta no coincide con tu progreso.' })
+      }
+
+      const correcta = letra === String(preguntas[0].respuesta_correcta).trim().toUpperCase()
+      estado.respuestas[indice] = { letra, correcta }
+      if (correcta) {
+        estado.aciertos += 1
+        estado.puntuacion += 100
+      } else {
+        estado.errores += 1
+      }
+
+      responder({
+        ok: true,
+        correcta,
+        respuesta_correcta: String(preguntas[0].respuesta_correcta).trim().toUpperCase(),
+        puntuacion: estado.puntuacion,
+        aciertos: estado.aciertos,
+        errores: estado.errores
+      })
+      io.to(codigo).emit('quiz:marcador', obtenerMarcadorQuiz(sala))
+    } catch (error) {
+      console.error('Error al registrar respuesta del Quiz:', error.message)
+      responder({ ok: false, mensaje: 'No se pudo registrar la respuesta.' })
+    }
+  })
+
+  socket.on('quiz:siguiente', (datos = {}) => {
+    const codigo = socket.data.codigoSala
+    const sala = codigo ? salas.get(codigo) : null
+    const estado = sala?.quiz?.jugadores?.[socket.data.idUsuario]
+    const indice = Number(datos.indice)
+    if (!estado || !Number.isInteger(indice) || indice < estado.pregunta || indice > estado.pregunta + 1) return
+    estado.pregunta = indice
+    io.to(codigo).emit('quiz:marcador', obtenerMarcadorQuiz(sala))
+  })
+
+  socket.on('salir-sala', () => {
+    const codigo = socket.data.codigoSala
+    const sala = codigo ? salas.get(codigo) : null
+    if (!sala) return
+
+    socket.leave(codigo)
+    const sigueActiva = quitarParticipante(sala, socket.data.idUsuario)
+    socket.data.codigoSala = null
+    socket.data.idUsuario = null
+    if (sigueActiva) emitirActualizacionSala(sala)
+  })
+
+  socket.on('disconnect', () => {
+    const codigo = socket.data.codigoSala
+    const sala = codigo ? salas.get(codigo) : null
+    if (sala) {
+      if (sala.estado === 'en_juego') {
+        const participante = sala.participantes.find(p => p.id_usuario === socket.data.idUsuario)
+        if (participante && participante.socket_id === socket.id) participante.socket_id = null
+      } else {
+        const sigueActiva = quitarParticipante(sala, socket.data.idUsuario)
+        if (sigueActiva) emitirActualizacionSala(sala)
+      }
+    }
+    console.log(`🔌 Cliente desconectado: ${socket.id}`)
+  })
+})
+
+// ========================================
 // INICIAR SERVIDOR
 // ========================================
 
 conexion.preparacion.then(() => {
-  app.listen(PORT, () => {
-    console.log(
-      `🚀 Servidor ejecutándose en http://localhost:${PORT}`
-    )
+  servidor.listen(PORT, () => {
+    console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`)
+    console.log('🎮 Multijugador Socket.IO disponible')
   })
 })

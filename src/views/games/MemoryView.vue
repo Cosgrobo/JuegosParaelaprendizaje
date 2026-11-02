@@ -14,7 +14,7 @@
           <div><strong>{{ intentos }}</strong><span>Intentos</span></div>
         </div>
         <div class="completion-actions">
-          <button class="completion-primary" @click="reiniciarJuego"> Jugar otra vez</button>
+          <button v-if="!multijugador" class="completion-primary" @click="reiniciarJuego"> Jugar otra vez</button>
           <button class="completion-secondary" @click="router.push('/home')"> Volver al inicio</button>
         </div>
       </section>
@@ -38,6 +38,20 @@
         con su definición correspondiente.
       </p>
     </div>
+
+    <section v-if="multijugador" class="multiplayer-panel">
+      <p class="multiplayer-status">{{ estadoConexion }}</p>
+      <h2>Partida multijugador · Sala {{ codigoSala }}</h2>
+      <p v-if="turnoMemorama === idUsuario">Es tu turno: selecciona dos cartas.</p>
+      <p v-else-if="turnoMemorama">Turno de {{ jugadoresMemorama.find(j => j.id_usuario === turnoMemorama)?.nombre || 'otro jugador' }}.</p>
+      <ol class="multiplayer-list">
+        <li v-for="jugador in [...jugadoresMemorama].sort((a,b) => b.puntuacion-a.puntuacion)" :key="jugador.id_usuario">
+          <span>{{ jugador.nombre }} <small v-if="jugador.id_usuario === idUsuario">(Tú)</small></span>
+          <strong>{{ jugador.puntuacion }} pts</strong>
+          <small>{{ jugador.aciertos }} parejas</small>
+        </li>
+      </ol>
+    </section>
 
     <!-- PANEL DE MÉTRICAS -->
     <div class="metrics-grid">
@@ -198,10 +212,18 @@ import { useRoute } from 'vue-router'
 import BackToMenu from '../../components/BackToMenu.vue'
 import { guardarResultadoPartida } from '../../utils/guardarResultadoPartida.js'
 import { useRouter } from 'vue-router'
+import { io } from 'socket.io-client'
 const router = useRouter()
 
 const route = useRoute()
 const idJuego = computed(() => Number(route.params.id || 4))
+const codigoSala = computed(() => String(route.query.sala || '').trim().toUpperCase())
+const multijugador = computed(() => Boolean(codigoSala.value))
+const socketMemorama = ref(null)
+const idUsuario = ref(0)
+const jugadoresMemorama = ref([])
+const turnoMemorama = ref(null)
+const estadoConexion = ref('')
 
 // ========================================
 // API DEL MEMORAMA
@@ -276,6 +298,89 @@ const newForm = ref({
   definicion: ''
 })
 
+
+
+const conectarMemoramaMultijugador = () => {
+  try {
+    const usuarioGuardado = JSON.parse(localStorage.getItem('usuario') || 'null')
+    idUsuario.value = Number(usuarioGuardado?.id_usuario || 0)
+  } catch {
+    idUsuario.value = 0
+  }
+  if (!idUsuario.value) {
+    errorCarga.value = 'No se pudo identificar tu usuario para la partida multijugador.'
+    return
+  }
+
+  estadoConexion.value = 'Conectando con la sala…'
+  socketMemorama.value = io('http://localhost:3000', {
+    reconnection: true,
+    reconnectionAttempts: 5,
+    timeout: 10000
+  })
+
+  socketMemorama.value.on('connect', () => {
+    socketMemorama.value.emit('memorama:reconectar', {
+      codigo: codigoSala.value,
+      id_usuario: idUsuario.value
+    }, respuesta => {
+      if (!respuesta?.ok) {
+        estadoConexion.value = respuesta?.mensaje || 'No se pudo recuperar la partida.'
+        return
+      }
+      aplicarEstadoMemorama(respuesta.estado)
+      estadoConexion.value = `Conectado a la sala ${codigoSala.value}`
+    })
+  })
+
+  socketMemorama.value.on('memorama:estado', estado => {
+    if (estado?.codigo === codigoSala.value) aplicarEstadoMemorama(estado)
+  })
+  socketMemorama.value.on('disconnect', () => {
+    estadoConexion.value = 'Conexión perdida. Intentando reconectar…'
+  })
+  socketMemorama.value.on('connect_error', () => {
+    estadoConexion.value = 'No se pudo conectar con el servidor multijugador.'
+  })
+}
+
+const aplicarEstadoMemorama = estado => {
+  if (!estado) return
+  cartas.value = estado.cartas.map(carta => ({ ...carta }))
+  intentos.value = estado.intentos
+  parejas.value = estado.parejas
+  puntos.value = estado.jugadores.find(j => j.id_usuario === idUsuario.value)?.puntuacion || 0
+  jugadoresMemorama.value = estado.jugadores || []
+  turnoMemorama.value = estado.turno
+  bloqueado.value = Boolean(estado.bloqueado)
+  if ((estado.intentos > 0 || estado.cartas.some(c => c.volteada)) && !juegoIniciado.value) {
+    juegoIniciado.value = true
+    horaInicio.value = new Date()
+    iniciarTemporizador()
+  }
+  primeraCarta.value = null
+  segundaCarta.value = null
+  if (estado.terminado) {
+    mensajeEstado.value = '🏆 ¡La sala completó todas las parejas!'
+    if (intervalo) { clearInterval(intervalo); intervalo = null }
+    resultadoGuardado.value = true
+  } else if (estado.bloqueado) {
+    mensajeEstado.value = 'Revisando la pareja…'
+  } else if (estado.turno === idUsuario.value) {
+    mensajeEstado.value = '¡Es tu turno! Encuentra una pareja.'
+  } else {
+    const jugador = jugadoresMemorama.value.find(j => j.id_usuario === estado.turno)
+    mensajeEstado.value = `Turno de ${jugador?.nombre || 'otro jugador'}.`
+  }
+}
+
+const seleccionarCartaEnServidor = (carta) => new Promise(resolve => {
+  if (!socketMemorama.value?.connected) {
+    resolve({ ok: false, mensaje: 'No hay conexión con la sala.' })
+    return
+  }
+  socketMemorama.value.emit('memorama:seleccionar', { indice: carta.indice }, resolve)
+})
 
 // ========================================
 // CARGAR PAREJAS DESDE MYSQL
@@ -494,7 +599,23 @@ const progressPercentage = computed(() => {
 // SELECCIONAR CARTA
 // ========================================
 
-const seleccionarCarta = (carta) => {
+const seleccionarCarta = async (carta) => {
+
+  if (multijugador.value) {
+    if (turnoMemorama.value !== idUsuario.value || bloqueado.value || carta.volteada || carta.encontrada) return
+    const respuesta = await seleccionarCartaEnServidor(carta)
+    if (!respuesta?.ok) {
+      mensajeEstado.value = respuesta?.mensaje || 'No se pudo seleccionar la carta.'
+      return
+    }
+    if (respuesta.estado) aplicarEstadoMemorama(respuesta.estado)
+    if (!juegoIniciado.value) {
+      juegoIniciado.value = true
+      horaInicio.value = new Date()
+      iniciarTemporizador()
+    }
+    return
+  }
 
   if (
     bloqueado.value ||
@@ -684,6 +805,11 @@ const limpiarSeleccion = () => {
 
 const reiniciarJuego = () => {
 
+  if (multijugador.value) {
+    mensajeEstado.value = 'La partida multijugador ya está en curso. Para jugar otra vez, crea una nueva sala.'
+    return
+  }
+
   if (intervalo) {
 
     clearInterval(intervalo)
@@ -834,10 +960,9 @@ const leaderboard = ref([
 // AL CARGAR LA VISTA
 // ========================================
 
-onMounted(() => {
-
-  fetchConceptos()
-
+onMounted(async () => {
+  await fetchConceptos()
+  if (multijugador.value && !errorCarga.value) conectarMemoramaMultijugador()
 })
 
 
@@ -846,6 +971,8 @@ onMounted(() => {
 // ========================================
 
 onUnmounted(() => {
+  socketMemorama.value?.removeAllListeners()
+  socketMemorama.value?.disconnect()
 
   if (intervalo) {
 
@@ -859,6 +986,19 @@ onUnmounted(() => {
 
 
 <style scoped>
+
+.multiplayer-panel {
+  margin: 18px 0 24px;
+  padding: 16px 20px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #eff6ff;
+}
+.multiplayer-panel h2 { margin: 6px 0 10px; font-size: 1.1rem; }
+.multiplayer-status { font-size: .9rem; color: #1d4ed8; }
+.multiplayer-list { display: grid; gap: 8px; padding-left: 22px; }
+.multiplayer-list li { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.multiplayer-list li strong { margin-left: auto; }
 
 .memory-container {
   max-width: 950px;

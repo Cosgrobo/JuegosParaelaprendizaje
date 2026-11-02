@@ -13,11 +13,18 @@ import DetectiveView from '../views/games/DetectiveView.vue'
 import EditarJuegoView from '../views/EditarJuegoView.vue'
 import CrearJuegoView from '../views/CrearJuegoView.vue'
 import ProfileView from '../views/ProfileView.vue'
+import SalaMultijugadorView from '../views/SalaMultijugadorView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
 
   routes: [
+    {
+      path: '/multijugador/:id',
+      name: 'sala-multijugador',
+      component: SalaMultijugadorView
+    },
+
 
     {
     path: '/juegos/editar/:id',
