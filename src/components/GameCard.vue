@@ -240,6 +240,14 @@ const desactivarJuego = async () => {
 
       </button>
 
+      <button
+        class="multiplayer-button"
+        type="button"
+        @click="$router.push({ path: '/multijugador', query: { juego: String(id), modo: 'crear' } })"
+      >
+        Jugar en multijugador
+      </button>
+
     </div>
 
   </article>
@@ -691,6 +699,8 @@ const desactivarJuego = async () => {
 
 .game-actions {
   margin-top: 22px;
+  display: grid;
+  gap: 10px;
 }
 
 
@@ -759,6 +769,25 @@ const desactivarJuego = async () => {
 
   filter:
     brightness(1.04);
+}
+
+.multiplayer-button {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--accent-a);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--accent-a);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease, transform .2s ease;
+}
+
+.multiplayer-button:hover {
+  transform: translateY(-1px);
+  background: var(--accent-a);
+  color: #fff;
 }
 
 

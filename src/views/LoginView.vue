@@ -15,7 +15,7 @@ const iniciarSesion = async () => {
   cargando.value = true
 
   try {
-    const respuesta = await fetch('http://localhost:3000/api/login', {
+    const respuesta = await fetch('/api/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -33,10 +33,8 @@ const iniciarSesion = async () => {
       return
     }
 
-    localStorage.setItem(
-      'usuario',
-      JSON.stringify(datos.usuario)
-    )
+    localStorage.setItem('usuario', JSON.stringify(datos.usuario))
+    localStorage.setItem('token', datos.token)
 
     router.push('/home')
 
@@ -977,3 +975,4 @@ input:focus {
 }
 
 </style>
+

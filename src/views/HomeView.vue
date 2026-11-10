@@ -212,7 +212,7 @@ const obtenerJuegos = async () => {
 
     const respuesta =
       await fetch(
-        'http://localhost:3000/api/juegos'
+        '/api/juegos'
       )
 
 
@@ -287,6 +287,10 @@ onMounted(() => {
 
 
       <div class="top-actions">
+
+        <button class="create-button top-create" @click="$router.push('/multijugador?modo=unirse')">
+          <span>♟</span> Multijugador
+        </button>
 
         <button
           class="create-button top-create"

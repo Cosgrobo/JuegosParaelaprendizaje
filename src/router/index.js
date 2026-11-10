@@ -13,6 +13,7 @@ import DetectiveView from '../views/games/DetectiveView.vue'
 import EditarJuegoView from '../views/EditarJuegoView.vue'
 import CrearJuegoView from '../views/CrearJuegoView.vue'
 import ProfileView from '../views/ProfileView.vue'
+import MultiplayerView from '../views/MultiplayerView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -41,6 +42,12 @@ const router = createRouter({
       path: '/home',
       name: 'home',
       component: HomeView
+    },
+
+    {
+      path: '/multijugador',
+      name: 'multijugador',
+      component: MultiplayerView
     },
 
     {
@@ -98,3 +105,4 @@ const router = createRouter({
 })
 
 export default router
+

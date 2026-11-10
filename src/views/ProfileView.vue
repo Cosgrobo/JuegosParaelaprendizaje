@@ -177,73 +177,60 @@ const iniciales =
   })
 
 
-const cargarResultados =
-  async () => {
+const cargarResultados = async () => {
+  if (!usuario.value?.id_usuario) return
+  cargandoResultados.value = true
+  errorResultados.value = ''
 
-    if (
-      !usuario.value?.id_usuario
-    ) {
-      return
+  try {
+    const [respuestaLocal, respuestaMultijugador] = await Promise.all([
+      fetch(`/api/resultados/usuario/${usuario.value.id_usuario}`),
+      fetch('/api/salas/historial/usuario', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
+      })
+    ])
+
+    const datosLocales = await respuestaLocal.json()
+    if (!respuestaLocal.ok) {
+      throw new Error(datosLocales.mensaje || 'No se pudo obtener el historial')
     }
 
-
-    cargandoResultados.value =
-      true
-
-
-    errorResultados.value =
-      ''
-
-
-    try {
-
-      const respuesta =
-        await fetch(
-          `http://localhost:3000/api/resultados/usuario/${usuario.value.id_usuario}`
-        )
-
-
-      const datos =
-        await respuesta.json()
-
-
-      if (
-        !respuesta.ok
-      ) {
-
-        throw new Error(
-          datos.mensaje ||
-          'No se pudo obtener el historial'
-        )
-
-      }
-
-
-      resultados.value =
-        datos
-
-
-    } catch (error) {
-
-      console.error(
-        'Error al cargar el historial:',
-        error
-      )
-
-
-      errorResultados.value =
-        'No se pudo cargar el historial de partidas.'
-
-
-    } finally {
-
-      cargandoResultados.value =
-        false
-
+    let datosMultijugador = []
+    if (respuestaMultijugador.ok) {
+      const partidas = await respuestaMultijugador.json()
+      datosMultijugador = partidas.map((partida) => ({
+        id_resultado: `multijugador-${partida.id_partida}`,
+        id_usuario: partida.id_usuario,
+        id_juego: partida.id_juego,
+        id_unidad: partida.id_unidad,
+        unidad: partida.unidad,
+        juego: partida.juego,
+        tipo: partida.tipo || partida.tipo_juego,
+        modalidad_partida: 'multijugador',
+        modalidad_sala: partida.modalidad_partida,
+        codigo_sala: partida.codigo_sala,
+        fecha: partida.fecha,
+        hora_inicio: partida.hora_inicio,
+        hora_fin: partida.hora_fin,
+        tiempo_transcurrido: partida.tiempo_transcurrido,
+        aciertos: partida.aciertos,
+        errores: partida.errores,
+        puntuacion: partida.puntuacion,
+        resultado_general: partida.resultado_general,
+        resultado_individual: partida.resultado_individual
+      }))
     }
 
+    resultados.value = [...datosMultijugador, ...datosLocales]
+      .map((resultado) => ({ modalidad_partida: 'local', ...resultado }))
+      .sort((a, b) => new Date(b.hora_inicio || b.fecha) - new Date(a.hora_inicio || a.fecha))
+  } catch (error) {
+    console.error('Error al cargar el historial:', error)
+    errorResultados.value = 'No se pudo cargar el historial de partidas.'
+  } finally {
+    cargandoResultados.value = false
   }
-
+}
 
 const formatearTiempo =
   (segundos) => {
@@ -902,9 +889,11 @@ function cerrarSesion() {
 
 
                       <span class="game-type">
-
                         {{ resultado.tipo }}
+                      </span>
 
+                      <span class="mode-badge" :class="resultado.modalidad_partida">
+                        {{ resultado.modalidad_partida === 'multijugador' ? 'Multijugador' : 'Juego local' }}
                       </span>
 
 
@@ -1804,6 +1793,21 @@ h2 {
 }
 
 
+.mode-badge {
+  display: inline-flex;
+  margin: 6px 0 0 7px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.mode-badge.multijugador {
+  background: #e9f9f3;
+  color: #07805f;
+}
 .unit-badge {
   display: inline-flex;
 

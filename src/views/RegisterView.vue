@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -37,7 +37,7 @@ const registrarUsuario = async () => {
   cargando.value = true
 
   try {
-    const respuesta = await fetch('http://localhost:3000/api/registro', {
+    const respuesta = await fetch('/api/registro', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -57,12 +57,14 @@ const registrarUsuario = async () => {
       return
     }
 
+    localStorage.setItem('usuario', JSON.stringify(datos.usuario))
+    localStorage.setItem('token', datos.token)
     mensaje.value = 'Usuario registrado correctamente'
     tipoMensaje.value = 'exito'
 
     setTimeout(() => {
-      router.push('/')
-    }, 1500)
+      router.push('/home')
+    }, 900)
 
   } catch (error) {
     console.error(error)
@@ -285,3 +287,4 @@ form { display: grid; gap: 16px; }
   .welcome-bubble { animation: none; }
 }
 </style>
+

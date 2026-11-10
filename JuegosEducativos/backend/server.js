@@ -2,10 +2,11 @@ const express = require('express')
 const cors = require('cors')
 const conexion = require('./db')
 const bcrypt = require('bcrypt')
+const crypto = require('crypto')
 
 
 const app = express()
-const PORT = 3000
+const PORT = Number(process.env.PORT || 3000)
 
 
 // ========================================
@@ -14,6 +15,15 @@ const PORT = 3000
 
 app.use(cors())
 app.use(express.json())
+app.use('/api/salas', require('./salas')(conexion))
+
+async function crearSesion(idUsuario) {
+  const token = crypto.randomBytes(32).toString('hex')
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+  await conexion.query(`INSERT INTO sesiones_usuario (token_hash,id_usuario,expira_en)
+    VALUES (?,?,DATE_ADD(NOW(), INTERVAL 30 DAY))`, [tokenHash,idUsuario])
+  return token
+}
 
 
 // ========================================
@@ -213,7 +223,7 @@ app.get('/api/juegos/:id/palabras-sopa', async (req, res) => {
       `
       SELECT
         id_palabra,
-        palabra,
+        CHAR_LENGTH(palabra) AS longitud,
         pista
       FROM palabras_sopa
       WHERE id_juego = ?
@@ -317,7 +327,7 @@ app.get('/api/juegos/:id/crucigrama', async (req, res) => {
     const [palabras] = await conexion.query(`
       SELECT
         id_palabra,
-        palabra,
+        CHAR_LENGTH(palabra) AS longitud,
         pista,
         fila,
         columna,
@@ -647,8 +657,7 @@ app.get('/api/juegos/:id/preguntas', async (req, res) => {
         opcion_a,
         opcion_b,
         opcion_c,
-        opcion_d,
-        respuesta_correcta
+        opcion_d
       FROM preguntas
       WHERE id_juego = ?
       ORDER BY id_pregunta
@@ -1102,6 +1111,8 @@ app.post('/api/login', async (req, res) => {
       mensaje:
         'Inicio de sesión correcto',
 
+      token: await crearSesion(usuarioEncontrado.id_usuario),
+
       usuario: {
         id_usuario:
           usuarioEncontrado.id_usuario,
@@ -1132,6 +1143,20 @@ app.post('/api/login', async (req, res) => {
 // ========================================
 // REGISTRO
 // ========================================
+
+app.post('/api/logout', async (req, res) => {
+  try {
+    const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    if (token) {
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+      await conexion.query('DELETE FROM sesiones_usuario WHERE token_hash=?', [tokenHash])
+    }
+    res.json({ mensaje: 'Sesión cerrada' })
+  } catch (error) {
+    console.error('Error al cerrar sesión:', error.message)
+    res.status(500).json({ mensaje: 'No se pudo cerrar la sesión' })
+  }
+})
 
 app.post('/api/registro', async (req, res) => {
   try {
@@ -1198,6 +1223,8 @@ app.post('/api/registro', async (req, res) => {
       mensaje:
         'Usuario registrado correctamente',
 
+      token: await crearSesion(resultado.insertId),
+
       usuario: {
         id_usuario:
           resultado.insertId,
@@ -1240,7 +1267,6 @@ app.get('/api/juegos/:id/enigmas', async (req, res) => {
         id_juego,
         materia,
         titulo,
-        respuesta,
         pista_1,
         pista_2,
         pista_3
@@ -1419,8 +1445,6 @@ app.get('/api/juegos/:id/memorama', async (req, res) => {
     const [parejas] = await conexion.query(
       `
       SELECT
-        id_pareja,
-        id_juego,
         elemento_1,
         elemento_2
       FROM parejas_memorama
@@ -1430,7 +1454,10 @@ app.get('/api/juegos/:id/memorama', async (req, res) => {
       [id]
     )
 
-    res.json(parejas)
+    const cartas = parejas.flatMap((pareja) => [pareja.elemento_1, pareja.elemento_2])
+      .sort(() => Math.random() - 0.5)
+      .map((elemento) => ({ tarjeta: crypto.randomUUID(), elemento }))
+    res.json({ cartas })
 
   } catch (error) {
 
@@ -1578,7 +1605,7 @@ app.get('/api/juegos/:id/crucigrama', async (req, res) => {
       SELECT
         id_palabra,
         id_juego,
-        palabra,
+        CHAR_LENGTH(palabra) AS longitud,
         pista,
         fila,
         columna,
@@ -1808,4 +1835,7 @@ conexion.preparacion.then(() => {
       `🚀 Servidor ejecutándose en http://localhost:${PORT}`
     )
   })
+}).catch((error) => {
+  console.error('No se pudo iniciar la API. Revisa MySQL y las variables de conexión.', error.message)
+  process.exitCode = 1
 })
